@@ -14,6 +14,11 @@ Windows-only offline invoice app using PySide6, ReportLab, SQLModel/SQLite, and 
   - `assets/fonts/` (optional; add fonts like Noto Sans; falls back to built-in fonts if missing)
 - If the logo or fonts are missing, PDF generation still works and uses defaults.
 
+Legacy template option (optional):
+
+- You can enable a legacy overlay+merge path by setting `"use_template_overlay": true` in `settings.json`.
+- When enabled, the app will generate an overlay and merge it with your external template PDF. Keep the code-drawn mode as the default.
+
 ## Install & Run (Windows PowerShell)
 
 1. Optional: create and activate a virtual environment

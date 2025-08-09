@@ -1,5 +1,6 @@
 {
   "appName": "KMC Invoice",
+  "use_template_overlay": false,
   "database": {
     "path": "app/data/invoices.sqlite3"
   },

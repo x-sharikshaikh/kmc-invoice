@@ -14,6 +14,8 @@ from app.data.db import create_db_and_tables
 from app.data.repo import get_or_create_customer, create_invoice
 from app.printing.print_windows import print_pdf, open_file
 from app.pdf.pdf_draw import build_invoice_pdf
+from app.pdf.pdf_overlay import build_overlay as build_legacy_overlay  # deprecated path
+from app.pdf.pdf_merge import merge_with_template as merge_legacy  # deprecated path
 from app.core.numbering import bump_sequence_to_at_least, peek_next_invoice_number
 
 
@@ -239,9 +241,26 @@ def main() -> None:
             },
         }
 
-        # Build final PDF (code-drawn) directly
+        # Build final PDF
         try:
-            build_invoice_pdf(out_final, pdf_data)
+            if getattr(settings, 'use_template_overlay', False):
+                # Legacy overlay + merge path (requires a template.pdf configured in settings)
+                from tempfile import NamedTemporaryFile
+                tmp = NamedTemporaryFile(suffix=".pdf", delete=False)
+                tmp_path = Path(tmp.name)
+                tmp.close()
+                try:
+                    build_legacy_overlay(tmp_path, pdf_data)
+                    # Merge overlay into final (pass-through in current deprecated impl)
+                    merge_legacy(tmp_path, out_final)
+                finally:
+                    try:
+                        tmp_path.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+            else:
+                # Preferred code-drawn path
+                build_invoice_pdf(out_final, pdf_data)
         except Exception as e:
             QMessageBox.critical(win, "PDF failed", f"Could not generate the PDF.\n\nDetails: {e}")
             return
