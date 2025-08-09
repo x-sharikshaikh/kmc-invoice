@@ -182,6 +182,18 @@ def main() -> None:
     def on_save_pdf_and_optionally_print(do_print: bool = False):
         # Ensure settings reflect latest on-disk config
         _reload_settings_from_disk()
+        # Ensure output directory exists before persisting anything to DB
+        try:
+            out_dir = _ensure_save_dir()
+            if not out_dir.exists() or not out_dir.is_dir():
+                raise OSError(f"Output directory is not available: {out_dir}")
+        except Exception as e:
+            QMessageBox.critical(
+                win,
+                "Cannot save PDF",
+                f"Could not create or access the save folder:\n{SAVE_DIR}\n\nDetails: {e}",
+            )
+            return
         issues = win.validate_form() if hasattr(win, 'validate_form') else []
         if issues:
             QMessageBox.warning(win, "Fix form errors", "\n".join(f"• {m}" for m in issues))
@@ -223,8 +235,7 @@ def main() -> None:
         except Exception:
             pass
 
-        # Build final PDF (code-drawn) directly
-        out_dir = _ensure_save_dir()
+    # Build final PDF (code-drawn) directly
         inv_no = saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number']
         out_final = out_dir / f"{inv_no}.pdf"
 
