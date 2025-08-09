@@ -3,7 +3,7 @@
 Windows-only offline invoice app using PySide6, ReportLab, SQLModel/SQLite, and PyInstaller.
 
 - App code: `app/`
-- Assets: `assets/` (add your `template.pdf` and `logo.png`)
+- Assets: `assets/` (add your `logo.png` and optional `fonts/`)
 - Settings: `settings.json`
 
 ## Install & Run (Windows PowerShell)
@@ -60,6 +60,7 @@ Two options:
 
 ### Notes
 
-- Assets (template.pdf, logo.png, fonts) are bundled under `assets/`.
+- Template PDF is no longer required; invoices are fully code-drawn via ReportLab.
+- Assets (logo.png, fonts) are bundled under `assets/`.
 - `settings.json` is placed next to the EXE on first run if missing. You can edit it there.
 - At runtime the app resolves resources using PyInstaller's _MEIPASS or project root in dev.
