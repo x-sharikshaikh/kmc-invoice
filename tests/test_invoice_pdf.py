@@ -6,8 +6,7 @@ import math
 
 from pypdf import PdfReader
 
-from app.pdf.pdf_overlay import build_overlay
-from app.pdf.pdf_merge import merge_with_template
+from app.pdf.pdf_draw import build_invoice_pdf
 
 
 def _a4_size_points() -> tuple[float, float]:
@@ -15,7 +14,7 @@ def _a4_size_points() -> tuple[float, float]:
     return (595.2755905511812, 841.8897637795277)
 
 
-def test_invoice_pdf_overlay_and_merge(tmp_path: Path) -> None:
+def test_invoice_pdf_drawn(tmp_path: Path) -> None:
     # Arrange: sample data with 3 items and dd-mm-yyyy date
     items = [
         {"description": "Item A", "qty": 2, "rate": 150.0, "amount": 300.0},
@@ -32,16 +31,12 @@ def test_invoice_pdf_overlay_and_merge(tmp_path: Path) -> None:
         "total": expected_total,
     }
 
-    overlay_pdf = tmp_path / "overlay.pdf"
-    merged_pdf = tmp_path / "merged.pdf"
-
-    # Act: build overlay and merge with template (A4)
-    build_overlay(overlay_pdf, data)
-    # Merge with template if present, else function copies overlay (fallback)
-    merge_with_template(overlay_pdf, merged_pdf)
+    out_pdf = tmp_path / "drawn.pdf"
+    # Act: build code-drawn invoice directly (A4)
+    build_invoice_pdf(out_pdf, data)
 
     # Assert: merged has exactly one page of A4 size
-    reader = PdfReader(str(merged_pdf))
+    reader = PdfReader(str(out_pdf))
     assert len(reader.pages) == 1
 
     page = reader.pages[0]
