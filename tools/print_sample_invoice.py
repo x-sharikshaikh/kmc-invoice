@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 from datetime import date
 from app.pdf.pdf_overlay import build_overlay  # type: ignore
 from app.pdf.pdf_merge import merge_with_template  # type: ignore
+from app.printing.print_windows import open_file  # type: ignore
 
 
 def sample_data() -> dict:
@@ -44,6 +45,8 @@ def main() -> None:
     merge_with_template(overlay_path, out_pdf)
 
     print(f"Sample invoice written to: {out_pdf}")
+    # Auto-open for quick inspection on Windows
+    open_file(str(out_pdf))
 
 
 if __name__ == "__main__":
