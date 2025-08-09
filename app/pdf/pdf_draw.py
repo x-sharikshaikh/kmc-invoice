@@ -283,7 +283,8 @@ def _draw_totals(c: Canvas, font: str, data: Dict[str, Any], y: float) -> float:
     sub = float(data.get("subtotal", 0) or 0)
     tax = float(data.get("tax", 0) or 0)
     total = float(data.get("total", sub + tax))
-    tax_rate = float(_get(data, "invoice.tax_rate", 0) or 0)
+    # Prefer invoice.tax_rate then settings.tax_rate
+    tax_rate = float((_get(data, "invoice.tax_rate", None) or _get(data, "settings.tax_rate", 0) or 0))
 
     # separator line above totals
     _line(c, SL_X, y, TABLE_RIGHT, y)
@@ -306,7 +307,12 @@ def _draw_totals(c: Canvas, font: str, data: Dict[str, Any], y: float) -> float:
 
     # Thank you line
     c.setFont(font, TEXT_FONT_SIZE)
-    c.drawString(MARGIN_LEFT, y, "Thank you for choosing KMC!")
+    thanks = (
+        _get(data, "settings.thank_you", None)
+        or _get(data, "business.thank_you", None)
+        or "Thank you for choosing KMC!"
+    )
+    c.drawString(MARGIN_LEFT, y, str(thanks))
     return y - ROW_HEIGHT
 
 
@@ -314,9 +320,10 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
     y = MARGIN_BOTTOM + 10
     x = MARGIN_LEFT
     biz = data.get("business", {}) if isinstance(data.get("business"), dict) else {}
-    permit = biz.get("permit", "") or _get(data, "invoice.permit", "")
-    pan = biz.get("pan", "") or _get(data, "invoice.pan", "")
-    cheque_to = biz.get("cheque_to", "") or biz.get("chequeTo", "")
+    settings = data.get("settings", {}) if isinstance(data.get("settings"), dict) else {}
+    permit = biz.get("permit", "") or settings.get("permit", "") or _get(data, "invoice.permit", "")
+    pan = biz.get("pan", "") or settings.get("pan", "") or _get(data, "invoice.pan", "")
+    cheque_to = biz.get("cheque_to", "") or settings.get("cheque_to", "") or biz.get("chequeTo", "")
 
     c.setFont(font, SMALL_FONT_SIZE)
     if permit:
@@ -356,7 +363,9 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
 
     font = _register_font()
     c = Canvas(str(out), pagesize=PAGE_SIZE)
-    c.setAuthor("KMC Invoice")
+    # Set author from business_name if provided in settings or business
+    author = _get(data, "settings.business_name", None) or _get(data, "business.name", None) or "KMC Invoice"
+    c.setAuthor(str(author))
     c.setTitle(f"Invoice {str(_get(data, 'invoice.number', ''))}")
     c.setLineWidth(0.5)
 
