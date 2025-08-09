@@ -67,13 +67,26 @@ class MainWindow(QMainWindow):
         # Header with logo and title
         header = QHBoxLayout()
         self.logo_label = QLabel()
-        # Prefer configured logo path; fallback to bundled asset
+        # Prefer configured logo path when it exists; fallback to bundled asset; hide if none
         settings_logo = self.settings.logo_path
         default_logo_path = resource_path("assets/logo.png")
-        chosen_logo = Path(settings_logo) if settings_logo else default_logo_path
-        if chosen_logo.exists():
+        chosen_logo = None
+        if settings_logo:
+            p = Path(settings_logo)
+            if not p.exists():
+                rp = resource_path(settings_logo)
+                if rp.exists():
+                    p = rp
+            if p.exists():
+                chosen_logo = p
+        if not chosen_logo and default_logo_path.exists():
+            chosen_logo = default_logo_path
+        if chosen_logo and chosen_logo.exists():
             pm = QPixmap(str(chosen_logo))
             self.logo_label.setPixmap(pm.scaledToHeight(48, Qt.SmoothTransformation))
+            self.logo_label.show()
+        else:
+            self.logo_label.hide()
         self.title_label = QLabel(self.settings.business_name or "KMC Invoice")
         title_font = QFont()
         title_font.setPointSize(16)
@@ -435,12 +448,24 @@ class MainWindow(QMainWindow):
         # Update header title and logo
         self.title_label.setText(self.settings.business_name or "KMC Invoice")
         default_logo_path = resource_path("assets/logo.png")
-        chosen_logo = Path(self.settings.logo_path) if self.settings.logo_path else default_logo_path
-        if chosen_logo.exists():
+        chosen_logo = None
+        if self.settings.logo_path:
+            p = Path(self.settings.logo_path)
+            if not p.exists():
+                rp = resource_path(self.settings.logo_path)
+                if rp.exists():
+                    p = rp
+            if p.exists():
+                chosen_logo = p
+        if not chosen_logo and default_logo_path.exists():
+            chosen_logo = default_logo_path
+        if chosen_logo and chosen_logo.exists():
             pm = QPixmap(str(chosen_logo))
             self.logo_label.setPixmap(pm.scaledToHeight(48, Qt.SmoothTransformation))
+            self.logo_label.show()
         else:
             self.logo_label.clear()
+            self.logo_label.hide()
         # Update invoice number for new prefix (peek only)
         try:
             from app.data.db import get_session

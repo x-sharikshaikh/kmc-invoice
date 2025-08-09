@@ -206,24 +206,26 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     c.setLineWidth(0.5)
     c.setFillColor(TEXT_COLOR)
 
-    # Logo (left)
+    # Logo (left): prefer Settings.logo_path when it exists; else fallback to assets/logo.png; else skip
     logo_path: Path | None = None
     try:
         settings = data.get("settings", {}) if isinstance(data.get("settings"), dict) else {}
-        lp = settings.get("logo_path") or settings.get("logo")
+        lp = settings.get("logo_path")
         if lp:
             p = Path(lp)
-            if not p.exists():
-                p = resource_path(lp) if isinstance(lp, str) else p
+            if not p.exists() and isinstance(lp, str):
+                rp = resource_path(lp)
+                if rp.exists():
+                    p = rp
+            if p.exists():
+                logo_path = p
+        if not logo_path:
+            # fallback to bundled asset
+            p = resource_path("assets/logo.png")
             if p.exists():
                 logo_path = p
     except Exception:
-        pass
-    if not logo_path:
-        # fallback to assets/logo.png if available
-        p = resource_path("assets/logo.png")
-        if p.exists():
-            logo_path = p
+        logo_path = None
 
     if logo_path and logo_path.exists():
         try:
