@@ -40,8 +40,10 @@ def print_pdf(path: str, parent: Optional[QWidget] = None) -> bool:
 		# Common case: no application associated with printing PDFs
 		_show_warning(
 			"Unable to print the PDF.\n\n"
-			"Make sure a PDF viewer (e.g., Adobe Acrobat Reader) is installed and set as default for PDFs, "
-			"and that it supports the Print verb.")
+			"Install a PDF viewer (e.g., Adobe Acrobat Reader) and associate .pdf files with it as the default app.\n"
+			"Also ensure the viewer supports printing via the system context (Print verb).",
+			parent,
+		)
 		return False
 	except Exception as e:  # Defensive catch-all
 		_show_warning(f"Unexpected error while printing:\n{e}", parent)
