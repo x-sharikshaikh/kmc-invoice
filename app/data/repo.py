@@ -29,6 +29,7 @@ def get_or_create_customer(name: str, phone: Optional[str] = None, address: Opti
 
 		customer = Customer(name=normalized_name, phone=phone, address=address)
 		s.add(customer)
+		# Ensure PK is populated before leaving the session
 		s.flush()
 		s.refresh(customer)
 		return customer
@@ -98,10 +99,8 @@ def create_invoice(invoice_dto: Dict[str, Any]) -> Invoice:
 			)
 			s.add(it)
 
-		s.flush()
-		# Refresh items relationship
-		s.refresh(inv)
-		return inv
+	# After commit, the returned instance is detached but not expired (expire_on_commit=False)
+	return inv
 
 
 def list_invoices(limit: Optional[int] = None) -> List[Invoice]:

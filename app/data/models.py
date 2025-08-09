@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
+from typing import Optional, List
 
 from sqlmodel import Field, SQLModel, Relationship
+from sqlalchemy.orm import relationship
 from sqlalchemy import event
 
 
@@ -13,7 +14,7 @@ class Customer(SQLModel, table=True):
 	phone: Optional[str] = None
 	address: Optional[str] = None
 
-	invoices: list["Invoice"] = Relationship(back_populates="customer")
+	invoices: List["Invoice"] = Relationship(sa_relationship=relationship("Invoice", back_populates="customer"))
 
 
 class Invoice(SQLModel, table=True):
@@ -29,8 +30,8 @@ class Invoice(SQLModel, table=True):
 	total: float = 0.0
 	notes: Optional[str] = None
 
-	customer: Optional["Customer"] = Relationship(back_populates="invoices")
-	items: list["Item"] = Relationship(back_populates="invoice")
+	customer: Optional["Customer"] = Relationship(sa_relationship=relationship("Customer", back_populates="invoices"))
+	items: List["Item"] = Relationship(sa_relationship=relationship("Item", back_populates="invoice"))
 
 
 class Item(SQLModel, table=True):
@@ -42,7 +43,7 @@ class Item(SQLModel, table=True):
 	# Stored amount = qty * rate (computed on insert/update)
 	amount: float = 0.0
 
-	invoice: Optional["Invoice"] = Relationship(back_populates="items")
+	invoice: Optional["Invoice"] = Relationship(sa_relationship=relationship("Invoice", back_populates="items"))
 
 
 @event.listens_for(Item, "before_insert")

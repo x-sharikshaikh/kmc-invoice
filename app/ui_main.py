@@ -14,12 +14,14 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QFormLayout,
-    QGroupBox,
+    QFrame,
+    QHeaderView,
     QLineEdit,
     QTextEdit,
     QDateEdit,
     QTableWidget,
     QTableWidgetItem,
+    QStyledItemDelegate,
     QPushButton,
     QSpacerItem,
     QSizePolicy,
@@ -30,6 +32,25 @@ from app.core.settings import load_settings, Settings
 from app.core.numbering import next_invoice_number, peek_next_invoice_number
 from app.data.db import create_db_and_tables, get_session
 from app.core.paths import resource_path
+
+
+class LineItemDelegate(QStyledItemDelegate):
+    """Inset, styled editors for table cells to match card inputs."""
+    def __init__(self, parent=None, inset: int = 6):
+        super().__init__(parent)
+        self._inset = inset
+
+    def createEditor(self, parent, option, index):
+        ed = QLineEdit(parent)
+        ed.setObjectName("CellEditor")
+        # Right-align numeric columns (Qty=2, Rate=3)
+        if index.column() in (2, 3):
+            ed.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        return ed
+
+    def updateEditorGeometry(self, editor, option, index):
+        r = option.rect.adjusted(self._inset, self._inset, -self._inset, -self._inset)
+        editor.setGeometry(r)
 
 
 class MainWindow(QMainWindow):
@@ -98,21 +119,44 @@ class MainWindow(QMainWindow):
         header.addStretch(1)
         root_layout.addLayout(header)
 
-        # Top groups: Bill To (left) and Invoice Info (right)
+        # Top groups: Bill To (left) and Invoice Info (right) as "cards"
         top = QHBoxLayout()
-
-        bill_group = QGroupBox("BILL TO")
-        bill_form = QFormLayout(bill_group)
+        # Bill To card
+        bill_card = QFrame()
+        bill_card.setObjectName("Card")
+        bill_card_layout = QVBoxLayout(bill_card)
+        bill_card_layout.setContentsMargins(12, 12, 12, 12)
+        bill_card_layout.setSpacing(10)
+        bill_title = QLabel("BILL TO")
+        bill_title.setObjectName("SectionTitle")
+        bill_card_layout.addWidget(bill_title)
+        bill_form = QFormLayout()
+        bill_form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        bill_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         self.name_edit = QLineEdit()
         self.phone_edit = QLineEdit()
         self.addr_edit = QTextEdit()
         self.addr_edit.setFixedHeight(70)
-        bill_form.addRow("Name", self.name_edit)
-        bill_form.addRow("Phone", self.phone_edit)
-        bill_form.addRow("Address", self.addr_edit)
+        name_lbl = QLabel("Name"); name_lbl.setMinimumWidth(70)
+        phone_lbl = QLabel("Phone"); phone_lbl.setMinimumWidth(70)
+        addr_lbl = QLabel("Address"); addr_lbl.setMinimumWidth(70)
+        bill_form.addRow(name_lbl, self.name_edit)
+        bill_form.addRow(phone_lbl, self.phone_edit)
+        bill_form.addRow(addr_lbl, self.addr_edit)
+        bill_card_layout.addLayout(bill_form)
 
-        info_group = QGroupBox("Invoice Info")
-        info_form = QFormLayout(info_group)
+        # Invoice Info card
+        info_card = QFrame()
+        info_card.setObjectName("Card")
+        info_card_layout = QVBoxLayout(info_card)
+        info_card_layout.setContentsMargins(12, 12, 12, 12)
+        info_card_layout.setSpacing(10)
+        info_title = QLabel("Invoice Info")
+        info_title.setObjectName("SectionTitle")
+        info_card_layout.addWidget(info_title)
+        info_form = QFormLayout()
+        info_form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        info_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         self.inv_number = QLineEdit()
         self.inv_number.setReadOnly(True)
         # Auto-generate invoice number (peek only; do not increment until save)
@@ -125,16 +169,20 @@ class MainWindow(QMainWindow):
 
         self.date_edit = QDateEdit()
         self.date_edit.setDisplayFormat("dd-MM-yyyy")
+        self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
-        info_form.addRow("Number", self.inv_number)
-        info_form.addRow("Date", self.date_edit)
+        num_lbl = QLabel("Number"); num_lbl.setMinimumWidth(70)
+        date_lbl = QLabel("Date"); date_lbl.setMinimumWidth(70)
+        info_form.addRow(num_lbl, self.inv_number)
+        info_form.addRow(date_lbl, self.date_edit)
+        info_card_layout.addLayout(info_form)
 
         # Add subtle drop shadow effects
-        self._apply_shadow(bill_group)
-        self._apply_shadow(info_group)
+        self._apply_shadow(bill_card)
+        self._apply_shadow(info_card)
 
-        top.addWidget(bill_group, 1)
-        top.addWidget(info_group, 1)
+        top.addWidget(bill_card, 1)
+        top.addWidget(info_card, 1)
         root_layout.addLayout(top)
 
         # Line items table
@@ -143,6 +191,22 @@ class MainWindow(QMainWindow):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
+        # Ensure comfortable row height so text/editors aren't clipped
+        try:
+            self.table.verticalHeader().setDefaultSectionSize(40)
+        except Exception:
+            pass
+        # Use delegate with insets so editors don't touch cell borders
+        self.table.setItemDelegate(LineItemDelegate(self.table, inset=6))
+        # Column sizing: let Description take the remaining space, others fit to contents
+        try:
+            self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+            self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+            self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+            self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        except Exception:
+            pass
         # Center and bold header text
         try:
             self.table.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
@@ -284,23 +348,29 @@ class MainWindow(QMainWindow):
         ss = """
         QWidget { font-size: 13px; background: #fafafa; color: #222; }
         QMainWindow>QWidget { background: #fafafa; }
-        QGroupBox {
-            font-size: 14px; font-weight: 600;
-            border: 1px solid #e0e0e0; border-radius: 10px; margin-top: 16px;
-            background: #ffffff;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin; left: 12px; top: -10px; padding: 0 6px;
-            background: #fafafa; color: #333;
-        }
+    QFrame#Card { border: 1px solid #e0e0e0; border-radius: 10px; background: #ffffff; }
+    QLabel#SectionTitle { font-size: 14px; font-weight: 700; color: #333; padding: 0 2px 2px 2px; }
         QLabel { font-size: 13px; }
         QHeaderView::section {
             font-size: 14px; padding: 8px; font-weight: 600; background: #f2f2f2; border: 0px; border-bottom: 1px solid #ddd;
         }
         QTableWidget { border: 1px solid #e0e0e0; border-radius: 10px; background: #ffffff; gridline-color: #ececec; }
+        QTableView { outline: 0; }
+        QTableView::item:focus { outline: none; }
+        QTableWidget::item { padding: 6px 8px; }
+        /* Make in-cell editors (e.g., Description) match card inputs */
+        QLineEdit#CellEditor {
+            padding: 8px 12px; min-height: 30px; border: 1px solid #cfcfcf; border-radius: 10px;
+            background: #ffffff; color: #222;
+        }
+        QLineEdit#CellEditor:focus { border: 1px solid #5b8def; }
+        /* Keep selection subtle so the rounded editor stands out */
+        QTableView::item:selected { background: transparent; }
         QLineEdit, QTextEdit, QDateEdit {
             border: 1px solid #cfcfcf; border-radius: 10px; padding: 8px; background: #ffffff;
         }
+    QDateEdit::drop-down { width: 20px; }
+    QDateEdit::down-button, QDateEdit::up-button { width: 16px; }
         QLineEdit:focus, QTextEdit:focus, QDateEdit:focus { border: 1px solid #5b8def; }
         QPushButton {
             padding: 9px 16px; border-radius: 10px; border: 1px solid #d0d0d0; background: #ffffff;
@@ -319,25 +389,30 @@ class MainWindow(QMainWindow):
         ss = """
         QWidget { font-size: 13px; background: #2b2b2b; color: #f0f0f0; }
         QMainWindow>QWidget { background: #2b2b2b; }
-        QGroupBox {
-            font-size: 14px; font-weight: 600;
-            border: 1px solid #3d3d3d; border-radius: 10px; margin-top: 16px;
-            background: #2f2f2f;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin; left: 12px; top: -10px; padding: 0 6px;
-            background: #2b2b2b; color: #f0f0f0;
-        }
+    QFrame#Card { border: 1px solid #3d3d3d; border-radius: 10px; background: #2f2f2f; }
+    QLabel#SectionTitle { font-size: 14px; font-weight: 700; color: #f0f0f0; padding: 0 2px 2px 2px; }
         QLabel { font-size: 13px; color: #f0f0f0; }
         QHeaderView::section {
             font-size: 14px; padding: 8px; font-weight: 600; background: #3a3a3a; border: 0px; border-bottom: 1px solid #444;
             color: #f0f0f0;
         }
         QTableWidget { border: 1px solid #3d3d3d; border-radius: 10px; background: #2f2f2f; gridline-color: #444; }
+        QTableView { outline: 0; }
+        QTableView::item:focus { outline: none; }
+        QTableWidget::item { padding: 6px 8px; }
+        /* Dark in-cell editors styling to match card inputs */
+        QLineEdit#CellEditor {
+            padding: 8px 12px; min-height: 30px; border: 1px solid #666; border-radius: 10px;
+            background: #3a3a3a; color: #f0f0f0;
+        }
+        QLineEdit#CellEditor:focus { border: 1px solid #7aa2ff; }
+        QTableView::item:selected { background: transparent; }
         QLineEdit, QTextEdit, QDateEdit {
             border: 1px solid #555; border-radius: 10px; padding: 8px; background: #3a3a3a; color: #f0f0f0;
             selection-background-color: #5b8def; selection-color: #ffffff;
         }
+    QDateEdit::drop-down { width: 20px; }
+    QDateEdit::down-button, QDateEdit::up-button { width: 16px; }
         QLineEdit:focus, QTextEdit:focus, QDateEdit:focus { border: 1px solid #7aa2ff; }
         QPushButton {
             padding: 9px 16px; border-radius: 10px; border: 1px solid #555; background: #3a3a3a; color: #f0f0f0;

@@ -35,8 +35,12 @@ def create_db_and_tables(echo: bool = False) -> None:
 
 
 def get_session(echo: bool = False) -> Session:
-	"""Create a new SQLModel Session bound to the project engine."""
-	return Session(get_engine(echo=echo))
+	"""Create a new SQLModel Session bound to the project engine.
+
+	expire_on_commit=False so returned instances keep attribute values after commit
+	(avoids refresh on closed sessions when callers use detached instances).
+	"""
+	return Session(get_engine(echo=echo), expire_on_commit=False)
 
 
 @contextmanager

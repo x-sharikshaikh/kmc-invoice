@@ -1,49 +1,62 @@
 from __future__ import annotations
 
-import sys
+from datetime import date as _date
 from pathlib import Path
+import sys
 
 # Ensure we can import the app package when running this script directly
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from datetime import date
-from app.pdf.pdf_overlay import build_overlay  # type: ignore
-from app.pdf.pdf_merge import merge_with_template  # type: ignore
-from app.printing.print_windows import open_file  # type: ignore
+from app.core.settings import load_settings
+from app.pdf.pdf_draw import build_invoice_pdf
+from app.printing.print_windows import open_file
 
 
 def sample_data() -> dict:
+    items = [
+        {"description": "LED Panel Light 18W", "qty": 4, "rate": 525.00},
+        {"description": "Concealed Wiring (per room)", "qty": 2, "rate": 1750.00},
+        {"description": "Switchboard Replacement", "qty": 1, "rate": 950.00},
+    ]
+    for it in items:
+        it["amount"] = round(float(it["qty"]) * float(it["rate"]), 2)
+    subtotal = round(sum(i["amount"] for i in items), 2)
+    settings = load_settings()
+    tax = round(subtotal * float(settings.tax_rate), 2)
+    total = round(subtotal + tax, 2)
+
     return {
-        "invoice": {
-            "number": "KMC-TEST-0001",
-            "date": date.today().strftime("%d-%m-%Y"),
+        "invoice": {"number": "KMC-TEST-0001", "date": _date.today(), "tax_rate": settings.tax_rate},
+        "customer": {"name": "Acme Corp.", "phone": "+91 98765 43210", "address": "221B Baker Street\nLondon, NW1 6XE"},
+        "items": items,
+        "subtotal": subtotal,
+        "tax": tax,
+        "total": total,
+        "settings": {
+            "business_name": settings.business_name,
+            "owner": settings.owner,
+            "phone": settings.phone,
+            "permit": settings.permit,
+            "pan": settings.pan,
+            "cheque_to": settings.cheque_to,
+            "thank_you": settings.thank_you,
+            "invoice_prefix": settings.invoice_prefix,
+            "tax_rate": settings.tax_rate,
+            "logo_path": settings.logo_path,
         },
-        "customer": {
-            "name": "Acme Corp.",
-            "phone": "+91 98765 43210",
-            "address": "221B Baker Street\nLondon, NW1 6XE",
-        },
-        "items": [
-            {"description": "LED Panel Light 18W", "qty": 4, "rate": 525.00, "amount": 2100.00},
-            {"description": "Concealed Wiring (per room)", "qty": 2, "rate": 1750.00, "amount": 3500.00},
-            {"description": "Switchboard Replacement", "qty": 1, "rate": 950.00, "amount": 950.00},
-        ],
-        "total": 6550.00,
+        "business": {"permit": settings.permit, "pan": settings.pan, "cheque_to": settings.cheque_to},
     }
 
 
 def main() -> None:
-    out_dir = ROOT / "tools" / "out"
+    # Write under Documents/KMC Invoices for consistency
+    out_dir = Path.home() / "Documents" / "KMC Invoices"
     out_dir.mkdir(parents=True, exist_ok=True)
+    out_pdf = out_dir / "sample_invoice.pdf"
 
-    overlay_path = out_dir / "sample_overlay.pdf"
-    out_pdf = ROOT / "sample_invoice.pdf"
-
-    build_overlay(overlay_path, sample_data())
-    merge_with_template(overlay_path, out_pdf)
-
+    build_invoice_pdf(out_pdf, sample_data())
     print(f"Sample invoice written to: {out_pdf}")
     # Auto-open for quick inspection on Windows
     open_file(str(out_pdf))
