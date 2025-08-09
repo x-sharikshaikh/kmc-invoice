@@ -98,3 +98,5 @@ assets/samples/*.pdf
 tools/out/**
 calibrate.pdf
 sample_invoice.pdf
+assets/*template*.pdf
+assets/*Template*.pdf

@@ -13,7 +13,6 @@
     "dpi": 300
   },
   "pdf": {
-    "templatePath": "assets/template.pdf",
     "logoPath": "assets/logo.png",
     "fontRegular": "assets/fonts/NotoSans-Regular.ttf"
   }

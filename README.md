@@ -40,7 +40,7 @@ PDFs are saved to `~/Documents/KMC Invoices`.
 - App screenshot (add your own): `assets/samples/screenshot.png`
 - Redacted sample PDF: `assets/samples/sample-redacted.pdf`
 
-Generate the sample PDF (uses `assets/template.pdf` if present):
+Generate the sample PDF:
 
 ```powershell
 python tools/make_sample_pdf.py
