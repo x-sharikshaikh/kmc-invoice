@@ -1,0 +1,20 @@
+{
+  "appName": "KMC Invoice",
+  "database": {
+    "path": "app/data/invoices.sqlite3"
+  },
+  "currency": {
+    "code": "USD",
+    "symbol": "$",
+    "locale": "en_US"
+  },
+  "printing": {
+    "defaultPrinter": null,
+    "dpi": 300
+  },
+  "pdf": {
+    "templatePath": "assets/template.pdf",
+    "logoPath": "assets/logo.png",
+    "fontRegular": "assets/fonts/NotoSans-Regular.ttf"
+  }
+}

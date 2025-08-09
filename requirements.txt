@@ -1,0 +1,9 @@
+pyside6
+reportlab
+pypdf
+sqlmodel
+sqlalchemy
+aiosqlite
+pydantic
+qdarkstyle
+pyinstaller
