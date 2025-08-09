@@ -239,12 +239,13 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     # A separating line below header
     y = top_y - HEADER_HEIGHT
     # Header rule slightly bolder
-    prev_w = c._linewidth
+    prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(1.0)
     _line(c, MARGIN_LEFT, y, PAGE_WIDTH - MARGIN_RIGHT, y)
-    c.setLineWidth(prev_w)
+    if prev_w is not None:
+        c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
     return y
@@ -303,12 +304,13 @@ def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> fl
     # Header underline and outer border line start
     y -= 3
     # Draw a bolder rule for header
-    prev_w = c._linewidth
+    prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(0.9)
     _line(c, SL_X, y, TABLE_RIGHT, y)
-    c.setLineWidth(prev_w)
+    if prev_w is not None:
+        c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
     return y - (HEADER_ROW_HEIGHT - 3)
@@ -326,7 +328,7 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
     # vertical column lines (draw progressively with rows)
     # we’ll draw outer border lines as we go to keep crisp alignment
     # lighter grid lines for body
-    prev_w = c._linewidth
+    prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setLineWidth(0.3)
     c.setStrokeColor(GRID_COLOR)
@@ -379,7 +381,8 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
         drawn += 1
 
     # restore previous line width and color
-    c.setLineWidth(prev_w)
+    if prev_w is not None:
+        c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
     return y, drawn
@@ -405,12 +408,13 @@ def _draw_totals(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: 
     total = round(sub + tax, 2)
 
     # separator line above totals (slightly thicker)
-    prev_w = c._linewidth
+    prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(0.6)
     _line(c, SL_X, y, TABLE_RIGHT, y)
-    c.setLineWidth(prev_w)
+    if prev_w is not None:
+        c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
     y -= 6
@@ -466,12 +470,13 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
     # Authorized Signatory box on right
     bx = PAGE_WIDTH - MARGIN_RIGHT - SIGN_BOX_W
     by = MARGIN_BOTTOM
-    prev_w = c._linewidth
+    prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(0.7)
     c.rect(bx, by, SIGN_BOX_W, SIGN_BOX_H, stroke=1, fill=0)
-    c.setLineWidth(prev_w)
+    if prev_w is not None:
+        c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
     c.setFont(font, SMALL_FONT_SIZE)
@@ -543,5 +548,4 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
             y = _draw_totals(c, font, bold_font, data, y)
             _draw_footer(c, font, data)
 
-    c.showPage()
     c.save()
