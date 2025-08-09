@@ -13,7 +13,7 @@ from app.core.settings import load_settings
 from app.data.db import create_db_and_tables
 from app.data.repo import get_or_create_customer, create_invoice
 from app.printing.print_windows import print_pdf, open_file
-from app.pdf.pdf_overlay import build_invoice_pdf
+from app.pdf.pdf_overlay import build_overlay
 from app.pdf.pdf_merge import merge_with_template
 
 
@@ -124,42 +124,43 @@ def main() -> None:
         if issues:
             QMessageBox.warning(win, "Fix form errors", "\n".join(f"• {m}" for m in issues))
             return
+        # Collect UI data
+        collected = win.collect_data() if hasattr(win, 'collect_data') else None
+        if not collected:
+            # Fallback to legacy path
+            collected = {
+                'customer': {
+                    'name': win.name_edit.text().strip(),
+                    'phone': win.phone_edit.text().strip(),
+                    'address': win.addr_edit.toPlainText().strip(),
+                },
+                'invoice': {
+                    'number': win.inv_number.text().strip(),
+                    'date': win.date_edit.date().toString("dd-MM-yyyy"),
+                },
+                'items': _collect_items_from_table(win),
+            }
+
+        # Persist to DB
         saved = _save_draft_to_db(win)
-        data = {
-            "business": {
-                "name": settings.business_name,
-                "owner": settings.owner,
-                "phone": settings.phone,
-                "permit": settings.permit,
-                "pan": settings.pan,
-                "cheque_to": settings.cheque_to,
-                "thank_you": settings.thank_you,
+
+        # Build overlay with minimal data shape expected by build_overlay
+        overlay_data = {
+            'invoice': {
+                'number': saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number'],
+                'date': win.date_edit.date().toString("dd-MM-yyyy"),
             },
-            "invoice": {
-                "number": win.inv_number.text().strip(),
-                "date": win.date_edit.date().toString("dd-MM-yyyy"),
-            },
-            "customer": {
-                "name": win.name_edit.text().strip(),
-                "phone": win.phone_edit.text().strip(),
-                "address": win.addr_edit.toPlainText().strip(),
-            },
-            "items": _collect_items_from_table(win),
-            "subtotal": saved["subtotal"],
-            "tax": saved["tax"],
-            "total": saved["total"],
-            "settings": {
-                "logo": str((Path(__file__).resolve().parents[2] / "assets" / "logo.png").as_posix()),
-                "template": str((Path(__file__).resolve().parents[2] / "assets" / "template.pdf").as_posix()),
-                "font": str((Path(__file__).resolve().parents[2] / settings.pdf.get("fontRegular", "assets/fonts/NotoSans-Regular.ttf")).as_posix()) if isinstance(getattr(settings, 'pdf', {}), dict) else str((Path(__file__).resolve().parents[2] / "assets" / "fonts" / "NotoSans-Regular.ttf").as_posix()),
-            },
+            'customer': collected['customer'],
+            'items': collected['items'],
+            'total': collected.get('total'),
         }
 
         out_dir = _ensure_save_dir()
-        out_overlay = out_dir / f"{data['invoice']['number']}_overlay.pdf"
-        out_final = out_dir / f"{data['invoice']['number']}.pdf"
+        inv_no = overlay_data['invoice']['number']
+        out_overlay = out_dir / f"{inv_no}_overlay.pdf"
+        out_final = out_dir / f"{inv_no}.pdf"
 
-        build_invoice_pdf(data, out_overlay)
+        build_overlay(out_overlay, overlay_data)
         # Always try to merge with the bundled template; function will fallback if missing
         merge_with_template(out_overlay, out_final)
         out_overlay.unlink(missing_ok=True)
@@ -167,7 +168,15 @@ def main() -> None:
         if do_print:
             print_pdf(str(out_final))
         else:
-            open_file(str(out_final))
+            # Open the PDF in default viewer; optionally open folder on failure
+            ok = open_file(str(out_final))
+            if not ok:
+                # Try opening containing folder
+                try:
+                    from subprocess import run
+                    run(["explorer", "/select,", str(out_final)])
+                except Exception:
+                    pass
 
     win.btn_save_draft.clicked.connect(on_save_draft)
     win.btn_save_pdf.clicked.connect(lambda: on_save_pdf_and_optionally_print(False))

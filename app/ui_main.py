@@ -247,6 +247,59 @@ class MainWindow(QMainWindow):
             self.table.blockSignals(False)
             self._recalc_subtotal_tax_total()
 
+    def collect_data(self) -> dict:
+        """Collect form data for DB save and PDF build.
+
+        Returns dict with keys:
+          customer: {name, phone, address}
+          invoice: {number, date (datetime.date)}
+          items: [{description, qty, rate, amount}]
+          subtotal, tax, total
+        """
+        # Invoice basics
+        qd = self.date_edit.date()
+        inv_date = _date(qd.year(), qd.month(), qd.day())
+
+        # Items
+        items: list[dict] = []
+        rows = self.table.rowCount()
+        for r in range(rows):
+            desc_it = self.table.item(r, 1)
+            qty_it = self.table.item(r, 2)
+            rate_it = self.table.item(r, 3)
+            amt_it = self.table.item(r, 4)
+            def _f(it):
+                try:
+                    return float(it.text()) if it and it.text() else 0.0
+                except Exception:
+                    return 0.0
+            items.append({
+                'description': (desc_it.text() if desc_it else '').strip(),
+                'qty': _f(qty_it),
+                'rate': _f(rate_it),
+                'amount': _f(amt_it),
+            })
+
+        subtotal = round_money(sum(i['amount'] for i in items))
+        tax = round_money(subtotal * float(self.settings.tax_rate))
+        total = round_money(subtotal + tax)
+
+        return {
+            'customer': {
+                'name': self.name_edit.text().strip(),
+                'phone': self.phone_edit.text().strip(),
+                'address': self.addr_edit.toPlainText().strip(),
+            },
+            'invoice': {
+                'number': self.inv_number.text().strip(),
+                'date': inv_date,
+            },
+            'items': items,
+            'subtotal': float(subtotal),
+            'tax': float(tax),
+            'total': float(total),
+        }
+
     # --- Validation helpers ---
     def _clear_validation_styles(self) -> None:
         # Reset edits
