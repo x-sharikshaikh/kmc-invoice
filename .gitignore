@@ -92,3 +92,9 @@ __pypackages__/
 # Qt/PySide cache
 *.qmlc
 *.jsc
+
+# Generated samples and tool outputs
+assets/samples/*.pdf
+tools/out/**
+calibrate.pdf
+sample_invoice.pdf

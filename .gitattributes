@@ -1,0 +1,4 @@
+# Treat PDFs and other binaries as binary to avoid EOL conversions
+*.pdf binary
+*.ttf binary
+*.png binary
