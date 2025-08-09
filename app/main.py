@@ -111,6 +111,14 @@ def main() -> None:
 
     win = create_main_window()
 
+    # Initialize invoice number on load (peek next)
+    try:
+        from app.data.db import get_session
+        with get_session() as s:
+            win.inv_number.setText(peek_next_invoice_number(settings.invoice_prefix, s))
+    except Exception:
+        pass
+
     # Wire footer buttons
     try:
         win.btn_new_invoice.clicked.connect(win.new_invoice)
@@ -176,7 +184,11 @@ def main() -> None:
             }
 
         # Persist to DB
-        saved = _save_draft_to_db(win)
+        try:
+            saved = _save_draft_to_db(win)
+        except Exception as e:
+            QMessageBox.critical(win, "Save failed", f"Could not save invoice to the database.\n\nDetails: {e}")
+            return
 
         # Sync sequence so future peeks reflect at least this saved number
         try:
@@ -227,7 +239,12 @@ def main() -> None:
             },
         }
 
-        build_invoice_pdf(out_final, pdf_data)
+        # Build final PDF (code-drawn) directly
+        try:
+            build_invoice_pdf(out_final, pdf_data)
+        except Exception as e:
+            QMessageBox.critical(win, "PDF failed", f"Could not generate the PDF.\n\nDetails: {e}")
+            return
 
         # After successful save + PDF, bump already done; set next number in UI
         try:
@@ -238,17 +255,25 @@ def main() -> None:
             pass
 
         if do_print:
-            print_pdf(str(out_final))
+            try:
+                ok = print_pdf(str(out_final))
+                if ok is False:
+                    QMessageBox.warning(win, "Print issue", "The PDF was saved, but printing may have failed. Please print it manually.")
+            except Exception:
+                QMessageBox.warning(win, "Print issue", "The PDF was saved, but an error occurred while printing. Please print it manually.")
         else:
             # Open the PDF in default viewer; optionally open folder on failure
-            ok = open_file(str(out_final))
+            try:
+                ok = open_file(str(out_final))
+            except Exception:
+                ok = False
             if not ok:
                 # Try opening containing folder
                 try:
                     from subprocess import run
                     run(["explorer", "/select,", str(out_final)])
                 except Exception:
-                    pass
+                    QMessageBox.information(win, "Saved", f"Invoice saved to:\n{out_final}")
 
     win.btn_save_draft.clicked.connect(on_save_draft)
     win.btn_settings.clicked.connect(on_open_settings)

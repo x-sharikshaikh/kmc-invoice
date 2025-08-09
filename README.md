@@ -6,6 +6,14 @@ Windows-only offline invoice app using PySide6, ReportLab, SQLModel/SQLite, and 
 - Assets: `assets/` (add your `logo.png` and optional `fonts/`)
 - Settings: `settings.json`
 
+## Assets
+
+- Invoices are generated fully in code using ReportLab. An external `template.pdf` is not required.
+- Optional branding assets:
+  - `assets/logo.png` (optional; used if present)
+  - `assets/fonts/` (optional; add fonts like Noto Sans; falls back to built-in fonts if missing)
+- If the logo or fonts are missing, PDF generation still works and uses defaults.
+
 ## Install & Run (Windows PowerShell)
 
 1. Optional: create and activate a virtual environment
@@ -43,7 +51,7 @@ PDFs are saved to `~/Documents/KMC Invoices`.
 Generate the sample PDF:
 
 ```powershell
-python tools/make_sample_pdf.py
+python tools/make_sample_pdf_drawn.py
 ```
 
 ## Build a Windows EXE
@@ -57,10 +65,15 @@ Two options:
 
 - With spec file:
   - `pyinstaller tools/build.spec`
+    - The spec bundles `assets/` (logo/fonts) and `settings.json` only; no `template.pdf` is included.
 
 ### Notes
 
-- Template PDF is no longer required; invoices are fully code-drawn via ReportLab.
+- Template PDF is no longer required; invoices are fully code-drawn via ReportLab. No `template.pdf` needs to be bundled.
 - Assets (logo.png, fonts) are bundled under `assets/`.
 - `settings.json` is placed next to the EXE on first run if missing. You can edit it there.
 - At runtime the app resolves resources using PyInstaller's _MEIPASS or project root in dev.
+
+## QA Checklist
+
+See `tools/qa_checklist.txt` for end-to-end steps to verify pagination, formatting, printing, and packaged EXE behavior.

@@ -1,0 +1,83 @@
+KMC Invoice App — QA Checklist
+
+Goal: Verify core invoice generation, pagination, formatting, printing, and packaged EXE behavior.
+
+Prereqs
+- Windows 11 test machine (one dev machine, one clean machine for EXE test)
+- Python environment with project dependencies installed (for dev run)
+- Optional: default PDF viewer installed (Edge/Adobe)
+
+A. Basic run
+1) Launch app (dev):
+   - PowerShell:
+     python app/main.py
+   - App opens without errors; invoice number prefilled.
+
+B. Pagination scenarios
+For each scenario: fill Bill To (name/phone/address), set date (dd-MM-yyyy), add rows in table, then Save PDF and visually inspect.
+
+1) Single-row invoice (1 row)
+   - Add 1 item with description ~20–40 chars.
+   - Verify:
+     - Page count = 1 (A4 portrait)
+     - Date format dd-MM-yyyy
+     - Qty right aligned (up to 3 decimals, no trailing zeros)
+     - Rate/Amount with exactly 2 decimals
+     - Subtotal/Tax/Total math correct
+     - Thank-you line present
+     - Footer shows Permit/PAN/Cheque to (if set)
+     - Signature rectangle on bottom-right
+     - Logo visible if configured (assets/logo.png or settings.logo_path)
+
+2) Mid-size invoice (6 rows)
+   - Add 6 items; ensure at least one long description (~100–140 chars).
+   - Verify:
+     - All rows on a single page (header + table header + rows + totals fit)
+     - Description wraps to max 2 lines per row with ellipsis if needed
+     - Numeric columns share a right edge and align across different row heights
+     - Grid lines light, header rule and totals rules slightly bolder
+
+3) Long invoice (15 rows)
+   - Add 15 items (mix of short/long descriptions).
+   - Verify:
+     - Pagination occurs (2+ pages)
+     - Repeated header and table header on each new page
+     - No totals on intermediate pages; totals only on final page
+     - No overlap between last row and footer/signature area
+     - Thank-you line above signature area on final page
+
+C. Content & formatting checks
+- Header: "INVOICE" title bold; logo positioned left; header rule visible
+- Columns: Sl., Description, Qty, Rate, Amount headers present
+- Numbers:
+  - Qty formatted up to 3 decimals without trailing zeros
+  - Rate/Amount/Subtotal/Tax/Total displayed with 2 decimals
+  - Totals computed with rounding to 2 decimals (banker’s rounding)
+- Footer: Permit, PAN, Cheque to present when configured
+- Colors: white background, black text, gray table grid, black header/totals/signature rules
+
+D. Printing
+- Open a generated PDF from ~/Documents/KMC Invoices
+- Print to:
+  1) Physical printer (if available) — verify layout/contrast
+  2) Microsoft Print to PDF — file saved, content intact
+- From the app, use Print button and confirm behavior
+
+E. Packaged EXE (clean Windows 11)
+1) Build on dev machine:
+   - Ensure deps: pip install -r requirements.txt
+   - Build:
+     pyinstaller --noconfirm --clean --name "KMC Invoice" --noconsole --hidden-import sqlalchemy --hidden-import pydantic --add-data "assets;assets" --add-data "settings.json;." app/main.py
+   - Or:
+     pyinstaller tools/build.spec
+2) Copy dist/KMC Invoice/ to a clean Windows 11 machine
+3) First run:
+   - Launch KMC Invoice.exe; settings.json should appear beside EXE if missing
+   - Add 3–5 items, Save PDF, open/print
+   - Verify logo/fonts load if assets folder is present
+4) Repeat pagination checks (6/15 rows) quickly to spot regressions
+
+F. Report findings
+- Record any issues, screenshots, and PDF samples
+- Update README “Notes” or a dedicated section with resolved items or known issues
+- File bugs with reproduction steps and attach sample PDFs where helpful
