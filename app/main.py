@@ -13,8 +13,7 @@ from app.core.settings import load_settings, save_settings, Settings
 from app.data.db import create_db_and_tables
 from app.data.repo import get_or_create_customer, create_invoice
 from app.printing.print_windows import print_pdf, open_file
-from app.pdf.pdf_overlay import build_overlay
-from app.pdf.pdf_merge import merge_with_template
+from app.pdf.pdf_draw import build_invoice_pdf
 from app.core.numbering import bump_sequence_to_at_least, peek_next_invoice_number
 
 
@@ -192,26 +191,32 @@ def main() -> None:
         except Exception:
             pass
 
-        # Build overlay with minimal data shape expected by build_overlay
-        overlay_data = {
-            'invoice': {
-                'number': saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number'],
-                'date': win.date_edit.date().toString("dd-MM-yyyy"),
-            },
-            'customer': collected['customer'],
-            'items': collected['items'],
-            'total': collected.get('total'),
-        }
-
+        # Build final PDF (code-drawn) directly
         out_dir = _ensure_save_dir()
-        inv_no = overlay_data['invoice']['number']
-        out_overlay = out_dir / f"{inv_no}_overlay.pdf"
+        inv_no = saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number']
         out_final = out_dir / f"{inv_no}.pdf"
 
-        build_overlay(out_overlay, overlay_data)
-        # Always try to merge with the bundled template; function will fallback if missing
-        merge_with_template(out_overlay, out_final)
-        out_overlay.unlink(missing_ok=True)
+        # Prepare data for the code-drawn generator
+        pdf_data = {
+            'customer': collected['customer'],
+            'invoice': {
+                'number': inv_no,
+                'date': (getattr(saved['invoice'], 'date', None) or win.date_edit.date().toString("dd-MM-yyyy")),
+                'tax_rate': settings.tax_rate,
+            },
+            'items': collected['items'],
+            'subtotal': saved.get('subtotal'),
+            'tax': saved.get('tax'),
+            'total': saved.get('total'),
+            'settings': {'logo_path': settings.logo_path} if settings.logo_path else {},
+            'business': {
+                'permit': settings.permit,
+                'pan': settings.pan,
+                'cheque_to': settings.cheque_to,
+            },
+        }
+
+        build_invoice_pdf(out_final, pdf_data)
 
         # After successful save + PDF, bump already done; set next number in UI
         try:
