@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
+from app.core.paths import resource_path
 
 
 def merge_overlay_with_template(template_path: Path | str, overlay_path: Path | str, out_path: Path | str) -> None:
@@ -34,8 +35,7 @@ def merge_with_template(overlay_pdf: Path, output_pdf: Path) -> None:
 	The output page size matches the template's mediabox to keep the background crisp.
 	If the template is missing, the overlay is copied to output as a fallback.
 	"""
-	root = Path(__file__).resolve().parents[2]
-	template_path = root / "assets" / "template.pdf"
+	template_path = resource_path("assets/template.pdf")
 
 	overlay_pdf = Path(overlay_pdf)
 	output_pdf = Path(output_pdf)

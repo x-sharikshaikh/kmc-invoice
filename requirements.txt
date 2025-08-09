@@ -1,9 +1,10 @@
 pyside6
 reportlab
 pypdf
-sqlmodel
-sqlalchemy
+sqlmodel==0.0.8
+sqlalchemy>=1.4,<2.0
 aiosqlite
-pydantic
+pydantic>=1.10,<2.0
 qdarkstyle
 pyinstaller
+pytest

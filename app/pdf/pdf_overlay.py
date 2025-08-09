@@ -9,6 +9,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from app.core.paths import resource_path
 
 try:
 	from pypdf import PdfReader  # to read template size if available
@@ -175,9 +176,12 @@ BILL_ADDR_LINE_SPACING = 4.5 * mm
 TABLE_TOP_Y = BILL_ADDR_Y - 20 * mm
 SL_X = MARGIN_LEFT
 DESC_X = SL_X + 15 * mm
-QTY_X = DESC_X + 95 * mm
-RATE_X = QTY_X + 30 * mm
-AMT_X = RATE_X + 35 * mm
+# Note: numeric columns are anchored off of AMT_X to keep a consistent vertical grid
+AMT_X = DESC_X + 160 * mm  # anchor for right-aligned numeric columns
+RATE_TO_AMT_GAP = 35 * mm
+QTY_TO_RATE_GAP = 30 * mm
+RATE_X = AMT_X - RATE_TO_AMT_GAP
+QTY_X = RATE_X - QTY_TO_RATE_GAP
 TABLE_WIDTH = AMT_X - SL_X
 ROW_HEIGHT = 6 * mm
 
@@ -225,6 +229,9 @@ COL_AMT_DX = float(_OFF.get("col_amt_dx", 0))
 TOTAL_DX = float(_OFF.get("total_dx", 0))
 TOTAL_DY = float(_OFF.get("total_dy", 0))
 
+# Baseline nudge for first row (points). Positive moves text down.
+FIRST_ROW_DY = float(_OFF.get("first_row_dy", 0))
+
 
 def _val(data: Dict[str, Any], *keys: str, default: str = "") -> str:
 	for k in keys:
@@ -262,8 +269,7 @@ def build_overlay(tmp_path: Path, data: Dict[str, Any]) -> None:
 	  - total (optional; if missing, computed from items)
 	"""
 	# Resolve font path
-	root = Path(__file__).resolve().parents[2]
-	font_path = root / "assets" / "fonts" / "NotoSans-Regular.ttf"
+	font_path = resource_path("assets/fonts/NotoSans-Regular.ttf")
 	font_name = _register_font(font_path if font_path.exists() else None)
 
 	tmp_path.parent.mkdir(parents=True, exist_ok=True)
@@ -291,13 +297,14 @@ def build_overlay(tmp_path: Path, data: Dict[str, Any]) -> None:
 		y_addr -= BILL_ADDR_LINE_SPACING
 
 	# Table headers
-	# Apply table-level shifts and per-column nudges
+	# Apply table-level shifts and per-column nudges.
+	# Keep numeric columns right-aligned to the Amount column's vertical grid by deriving positions from AMT_X.
 	y = TABLE_TOP_Y + TABLE_DY
 	SL_X2 = SL_X + TABLE_DX
 	DESC_X2 = DESC_X + TABLE_DX
-	QTY_X2 = QTY_X + TABLE_DX + COL_QTY_DX
-	RATE_X2 = RATE_X + TABLE_DX + COL_RATE_DX
 	AMT_X2 = AMT_X + TABLE_DX + COL_AMT_DX
+	RATE_X2 = AMT_X2 - RATE_TO_AMT_GAP + COL_RATE_DX
+	QTY_X2 = RATE_X2 - QTY_TO_RATE_GAP + COL_QTY_DX
 	c.setFont(font_name, 10)
 	c.drawString(SL_X2, y, "Sl.")
 	c.drawString(DESC_X2, y, "Description")
@@ -307,6 +314,8 @@ def build_overlay(tmp_path: Path, data: Dict[str, Any]) -> None:
 	y -= 4
 	c.line(SL_X2, y, SL_X2 + TABLE_WIDTH, y)
 	y -= ROW_HEIGHT / 2
+	# First row baseline fine-tune (in points)
+	y += FIRST_ROW_DY
 
 	# Rows
 	items = data.get("items", []) or []

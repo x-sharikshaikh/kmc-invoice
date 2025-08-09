@@ -6,8 +6,10 @@ from typing import Any, Dict, Optional, Union
 import json
 
 
-# Path to the repo root settings.json (…/kmc-invoice/settings.json)
-SETTINGS_PATH = Path(__file__).resolve().parents[2] / "settings.json"
+from app.core.paths import settings_path
+
+# Path to the settings.json (runtime-aware)
+SETTINGS_PATH = settings_path()
 
 
 @dataclass
@@ -21,6 +23,8 @@ class Settings:
 	thank_you: str = "Thank you for choosing KMC!"
 	invoice_prefix: str = "KMC-"
 	tax_rate: float = 0.00
+	# Optional absolute/relative path to a logo image
+	logo_path: Optional[str] = None
 
 	@classmethod
 	def from_dict(cls, data: Dict[str, Any]) -> "Settings":

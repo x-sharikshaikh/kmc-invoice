@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Generator, Optional
+from contextlib import contextmanager
 
 from sqlmodel import SQLModel, Session, create_engine
 
@@ -38,6 +39,7 @@ def get_session(echo: bool = False) -> Session:
 	return Session(get_engine(echo=echo))
 
 
+@contextmanager
 def session_scope(echo: bool = False) -> Generator[Session, None, None]:
 	"""Context manager-style generator for sessions.
 

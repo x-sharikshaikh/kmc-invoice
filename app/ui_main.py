@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QFont, QPixmap, QColor, QBrush
+from PySide6.QtWidgets import QGraphicsDropShadowEffect
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -26,11 +27,14 @@ from PySide6.QtWidgets import (
 
 from app.core.currency import fmt_money, round_money
 from app.core.settings import load_settings, Settings
-from app.core.numbering import next_invoice_number
+from app.core.numbering import next_invoice_number, peek_next_invoice_number
 from app.data.db import create_db_and_tables, get_session
+from app.core.paths import resource_path
 
 
 class MainWindow(QMainWindow):
+    dark_mode: bool = False
+
     def _recalc_subtotal_tax_total(self) -> None:
         sub = 0.0
         rows = self.table.rowCount()
@@ -62,19 +66,22 @@ class MainWindow(QMainWindow):
 
         # Header with logo and title
         header = QHBoxLayout()
-        logo_label = QLabel()
-        logo_path = Path(__file__).resolve().parents[2] / "assets" / "logo.png"
-        if logo_path.exists():
-            pm = QPixmap(str(logo_path))
-            logo_label.setPixmap(pm.scaledToHeight(48, Qt.SmoothTransformation))
-        title = QLabel("KMC Invoice")
+        self.logo_label = QLabel()
+        # Prefer configured logo path; fallback to bundled asset
+        settings_logo = self.settings.logo_path
+        default_logo_path = resource_path("assets/logo.png")
+        chosen_logo = Path(settings_logo) if settings_logo else default_logo_path
+        if chosen_logo.exists():
+            pm = QPixmap(str(chosen_logo))
+            self.logo_label.setPixmap(pm.scaledToHeight(48, Qt.SmoothTransformation))
+        self.title_label = QLabel(self.settings.business_name or "KMC Invoice")
         title_font = QFont()
         title_font.setPointSize(16)
         title_font.setBold(True)
-        title.setFont(title_font)
-        header.addWidget(logo_label)
+        self.title_label.setFont(title_font)
+        header.addWidget(self.logo_label)
         header.addSpacing(8)
-        header.addWidget(title)
+        header.addWidget(self.title_label)
         header.addStretch(1)
         root_layout.addLayout(header)
 
@@ -95,11 +102,11 @@ class MainWindow(QMainWindow):
         info_form = QFormLayout(info_group)
         self.inv_number = QLineEdit()
         self.inv_number.setReadOnly(True)
-        # Auto-generate invoice number
+        # Auto-generate invoice number (peek only; do not increment until save)
         try:
             with get_session() as s:
                 prefix = self.settings.invoice_prefix
-                self.inv_number.setText(next_invoice_number(prefix, s))
+                self.inv_number.setText(peek_next_invoice_number(prefix, s))
         except Exception:
             self.inv_number.setText(f"{self.settings.invoice_prefix}0001")
 
@@ -108,6 +115,10 @@ class MainWindow(QMainWindow):
         self.date_edit.setDate(QDate.currentDate())
         info_form.addRow("Number", self.inv_number)
         info_form.addRow("Date", self.date_edit)
+
+        # Add subtle drop shadow effects
+        self._apply_shadow(bill_group)
+        self._apply_shadow(info_group)
 
         top.addWidget(bill_group, 1)
         top.addWidget(info_group, 1)
@@ -119,6 +130,11 @@ class MainWindow(QMainWindow):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
+        # Center and bold header text
+        try:
+            self.table.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
+        except Exception:
+            pass
         root_layout.addWidget(self.table)
 
         # Table buttons
@@ -165,11 +181,25 @@ class MainWindow(QMainWindow):
         # Footer buttons
         footer = QHBoxLayout()
         footer.addStretch(1)
+        self.btn_new_invoice = QPushButton("New Invoice")
         self.btn_save_pdf = QPushButton("Save PDF")
         self.btn_print = QPushButton("Print")
         self.btn_save_draft = QPushButton("Save Draft")
         self.btn_settings = QPushButton("Settings")
-        for b in (self.btn_save_pdf, self.btn_print, self.btn_save_draft, self.btn_settings):
+        self.btn_customers = QPushButton("Customers")
+        # Theme toggle (QDarkStyle)
+        self.btn_theme = QPushButton("Dark Mode")
+        self.btn_theme.setCheckable(True)
+        self.btn_theme.toggled.connect(self._on_toggle_theme)
+        for b in (
+            self.btn_new_invoice,
+            self.btn_save_pdf,
+            self.btn_print,
+            self.btn_save_draft,
+            self.btn_settings,
+            self.btn_customers,
+            self.btn_theme,
+        ):
             footer.addWidget(b)
         root_layout.addLayout(footer)
 
@@ -179,26 +209,125 @@ class MainWindow(QMainWindow):
         add_btn.clicked.connect(self.add_row)
         rm_btn.clicked.connect(self.remove_selected_rows)
         self.table.itemChanged.connect(self.on_item_changed)
+        self.btn_new_invoice.clicked.connect(self.new_invoice)
+        self.btn_customers.clicked.connect(self.open_customers)
 
-        # Style
+        # Style (light theme by default)
         self.apply_styles()
 
         # Seed with one empty row
         self.add_row()
         self._recalc_subtotal_tax_total()
 
+    def new_invoice(self) -> None:
+        """Clear form fields, reset table, set date to today, and peek next invoice number."""
+        # Clear customer fields
+        self.name_edit.clear()
+        self.phone_edit.clear()
+        self.addr_edit.clear()
+        # Reset table to a single empty row
+        self.table.setRowCount(0)
+        self.add_row()
+        # Reset totals
+        self._recalc_subtotal_tax_total()
+        # Reset date to today
+        try:
+            self.date_edit.setDate(QDate.currentDate())
+        except Exception:
+            pass
+        # Peek next invoice number for current prefix without incrementing
+        try:
+            from app.data.db import get_session
+            from app.core.numbering import peek_next_invoice_number
+            with get_session() as s:
+                self.inv_number.setText(peek_next_invoice_number(self.settings.invoice_prefix, s))
+        except Exception:
+            self.inv_number.setText(f"{self.settings.invoice_prefix}0001")
+        # Clear any validation styles
+        if hasattr(self, '_clear_validation_styles'):
+            try:
+                self._clear_validation_styles()
+            except Exception:
+                pass
+
+    def open_customers(self) -> None:
+        try:
+            from app.widgets.customers_dialog import CustomersDialog
+        except Exception:
+            return
+        dlg = CustomersDialog(self)
+        if dlg.exec() == dlg.Accepted and dlg.selected is not None:
+            cust = dlg.selected
+            # Prefill BILL TO
+            try:
+                self.name_edit.setText(cust.name or "")
+                self.phone_edit.setText(cust.phone or "")
+                self.addr_edit.setPlainText(cust.address or "")
+            except Exception:
+                pass
+
     def apply_styles(self) -> None:
+        """Apply modern light theme via QSS."""
         ss = """
-        QWidget { font-size: 13px; }
-        QGroupBox { font-size: 14px; font-weight: 600; border: 1px solid #ccc; border-radius: 8px; margin-top: 12px; }
-        QGroupBox::title { subcontrol-origin: margin; left: 10px; top: -8px; padding: 0 4px; background: palette(window); }
+        QWidget { font-size: 13px; background: #fafafa; color: #222; }
+        QMainWindow>QWidget { background: #fafafa; }
+        QGroupBox {
+            font-size: 14px; font-weight: 600;
+            border: 1px solid #e0e0e0; border-radius: 10px; margin-top: 16px;
+            background: #ffffff;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin; left: 12px; top: -10px; padding: 0 6px;
+            background: #fafafa; color: #333;
+        }
         QLabel { font-size: 13px; }
-        QHeaderView::section { font-size: 14px; padding: 6px; }
-        QLineEdit, QTextEdit, QDateEdit, QTableWidget { border: 1px solid #bbb; border-radius: 6px; padding: 6px; }
-        QPushButton { padding: 8px 14px; border-radius: 6px; }
-        QPushButton:hover { background: #f0f0f0; }
+        QHeaderView::section {
+            font-size: 14px; padding: 8px; font-weight: 600; background: #f2f2f2; border: 0px; border-bottom: 1px solid #ddd;
+        }
+        QTableWidget { border: 1px solid #e0e0e0; border-radius: 10px; background: #ffffff; gridline-color: #ececec; }
+        QLineEdit, QTextEdit, QDateEdit {
+            border: 1px solid #cfcfcf; border-radius: 10px; padding: 8px; background: #ffffff;
+        }
+        QLineEdit:focus, QTextEdit:focus, QDateEdit:focus { border: 1px solid #5b8def; }
+        QPushButton {
+            padding: 9px 16px; border-radius: 10px; border: 1px solid #d0d0d0; background: #ffffff;
+        }
+        QPushButton:hover { background: #f3f6ff; border-color: #b8c6ff; }
+        QPushButton:pressed { background: #e8eeff; }
         """
+        # Clear any global stylesheet (if dark mode was previously active)
+        app = QApplication.instance()
+        if app:
+            app.setStyleSheet("")
         self.setStyleSheet(ss)
+
+    def _apply_shadow(self, widget: QWidget) -> None:
+        try:
+            shadow = QGraphicsDropShadowEffect(self)
+            shadow.setBlurRadius(16)
+            shadow.setOffset(0, 2)
+            shadow.setColor(QColor(0, 0, 0, 40))
+            widget.setGraphicsEffect(shadow)
+        except Exception:
+            pass
+
+    def _on_toggle_theme(self, checked: bool) -> None:
+        self.dark_mode = bool(checked)
+        if self.dark_mode:
+            # Apply QDarkStyle if available
+            try:
+                import qdarkstyle  # type: ignore
+                app = QApplication.instance()
+                if app:
+                    app.setStyleSheet(qdarkstyle.load_stylesheet_pyside6())
+                # Light per-widget stylesheet may conflict; clear it
+                self.setStyleSheet("")
+            except Exception:
+                # Fallback: keep light if qdarkstyle missing
+                self.btn_theme.setChecked(False)
+                self.apply_styles()
+        else:
+            self.apply_styles()
 
     def add_row(self) -> None:
         r = self.table.rowCount()
@@ -299,6 +428,29 @@ class MainWindow(QMainWindow):
             'tax': float(tax),
             'total': float(total),
         }
+
+    def refresh_settings(self, settings: Settings) -> None:
+        """Apply new settings to UI: logo, title, tax rate effects, invoice prefix."""
+        self.settings = settings
+        # Update header title and logo
+        self.title_label.setText(self.settings.business_name or "KMC Invoice")
+        default_logo_path = resource_path("assets/logo.png")
+        chosen_logo = Path(self.settings.logo_path) if self.settings.logo_path else default_logo_path
+        if chosen_logo.exists():
+            pm = QPixmap(str(chosen_logo))
+            self.logo_label.setPixmap(pm.scaledToHeight(48, Qt.SmoothTransformation))
+        else:
+            self.logo_label.clear()
+        # Update invoice number for new prefix (peek only)
+        try:
+            from app.data.db import get_session
+            from app.core.numbering import peek_next_invoice_number
+            with get_session() as s:
+                self.inv_number.setText(peek_next_invoice_number(self.settings.invoice_prefix, s))
+        except Exception:
+            self.inv_number.setText(f"{self.settings.invoice_prefix}0001")
+        # Recalculate totals to reflect new tax rate
+        self._recalc_subtotal_tax_total()
 
     # --- Validation helpers ---
     def _clear_validation_styles(self) -> None:

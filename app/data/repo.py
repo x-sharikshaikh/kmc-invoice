@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any, Dict, Iterable, List, Optional
+import csv
+from pathlib import Path
 
 from sqlmodel import Session, select
 from sqlalchemy import func
@@ -127,4 +129,75 @@ def get_invoice_by_number(number: str) -> Optional[Invoice]:
 			)
 		)
 		return s.exec(stmt).first()
+
+
+def search_customers(query: str = "", limit: int = 50) -> List[Customer]:
+	"""Search customers by name, phone, or address (case-insensitive). Returns up to limit results.
+
+	If query is blank, returns recent customers ordered by name ASC then id DESC.
+	"""
+	q = (query or "").strip().lower()
+	with get_session() as s:
+		stmt = select(Customer)
+		if q:
+			like = f"%{q}%"
+			# SQLite is case-insensitive with LIKE for ASCII; ensure lower() comparison for consistency
+			stmt = stmt.where(
+				(func.lower(Customer.name).like(like))
+				| (Customer.phone.like(like))
+				| (func.lower(Customer.address).like(like))
+			)
+		stmt = stmt.order_by(Customer.name.asc(), Customer.id.desc()).limit(int(limit) if limit else 50)
+		return list(s.exec(stmt).all())
+
+
+def export_customers_csv(path: str | Path) -> int:
+	"""Export all customers to a CSV file. Returns number of rows written.
+
+	Columns: name,phone,address
+	"""
+	p = Path(path)
+	p.parent.mkdir(parents=True, exist_ok=True)
+	count = 0
+	with get_session() as s:
+		rows = s.exec(select(Customer).order_by(Customer.name.asc(), Customer.id.asc())).all()
+		with p.open("w", encoding="utf-8", newline="") as f:
+			w = csv.writer(f)
+			w.writerow(["name", "phone", "address"])  # header
+			for c in rows:
+				w.writerow([c.name or "", c.phone or "", c.address or ""]) 
+				count += 1
+	return count
+
+
+def import_customers_csv(path: str | Path) -> int:
+	"""Import customers from CSV (name,phone,address). Returns number of inserted/updated rows.
+
+	Rules:
+	- If a row's name is empty, it's skipped.
+	- If a customer with the same name (case-insensitive) exists, update phone/address if provided.
+	- Otherwise, create a new customer.
+	"""
+	p = Path(path)
+	if not p.exists():
+		return 0
+	imported = 0
+	with session_scope() as s:
+		with p.open("r", encoding="utf-8", newline="") as f:
+			r = csv.DictReader(f)
+			for row in r:
+				name = (row.get("name") or "").strip()
+				if not name:
+					continue
+				phone = (row.get("phone") or "").strip() or None
+				address = (row.get("address") or "").strip() or None
+				# lookup existing by lower(name)
+				existing = s.exec(select(Customer).where(func.lower(Customer.name) == name.lower())).first()
+				if existing:
+					existing.phone = phone or existing.phone
+					existing.address = address or existing.address
+				else:
+					s.add(Customer(name=name, phone=phone, address=address))
+				imported += 1
+	return imported
 

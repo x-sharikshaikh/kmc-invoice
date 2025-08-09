@@ -6,15 +6,16 @@ from typing import List, Dict, Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut
-from PySide6.QtWidgets import QApplication, QTableWidgetItem, QMessageBox
+from PySide6.QtWidgets import QApplication, QTableWidgetItem, QMessageBox, QDialog
 
 from app.ui_main import create_main_window
-from app.core.settings import load_settings
+from app.core.settings import load_settings, save_settings, Settings
 from app.data.db import create_db_and_tables
 from app.data.repo import get_or_create_customer, create_invoice
 from app.printing.print_windows import print_pdf, open_file
 from app.pdf.pdf_overlay import build_overlay
 from app.pdf.pdf_merge import merge_with_template
+from app.core.numbering import bump_sequence_to_at_least, peek_next_invoice_number
 
 
 SAVE_DIR = Path.home() / "Documents" / "KMC Invoices"
@@ -112,12 +113,46 @@ def main() -> None:
     win = create_main_window()
 
     # Wire footer buttons
+    try:
+        win.btn_new_invoice.clicked.connect(win.new_invoice)
+    except Exception:
+        pass
     def on_save_draft():
         issues = win.validate_form() if hasattr(win, 'validate_form') else []
         if issues:
             QMessageBox.warning(win, "Fix form errors", "\n".join(f"• {m}" for m in issues))
             return
-        _save_draft_to_db(win)
+        saved = _save_draft_to_db(win)
+        # Bump sequence and refresh UI number for next invoice entry
+        try:
+            inv_no = saved['invoice'].number if hasattr(saved['invoice'], 'number') else win.inv_number.text().strip()
+            prefix = settings.invoice_prefix
+            suffix = inv_no.removeprefix(prefix)
+            n = int(''.join(ch for ch in suffix if ch.isdigit())) if suffix else 0
+            from app.data.db import get_session
+            with get_session() as s:
+                bump_sequence_to_at_least(prefix, n, s)
+                # Set the next number for convenience
+                win.inv_number.setText(peek_next_invoice_number(prefix, s))
+        except Exception:
+            pass
+
+    def on_open_settings():
+        nonlocal settings
+        try:
+            from app.widgets.settings_dialog import SettingsDialog
+            dlg = SettingsDialog(settings, parent=win)
+        except Exception:
+            # If import fails for any reason, just return
+            return
+        if dlg.exec() == QDialog.Accepted:
+            new_settings = dlg.result_settings()
+            # Persist to settings.json
+            save_settings(new_settings)
+            # Update in-memory settings and refresh UI defaults
+            settings = new_settings
+            if hasattr(win, 'refresh_settings'):
+                win.refresh_settings(new_settings)
 
     def on_save_pdf_and_optionally_print(do_print: bool = False):
         issues = win.validate_form() if hasattr(win, 'validate_form') else []
@@ -144,6 +179,19 @@ def main() -> None:
         # Persist to DB
         saved = _save_draft_to_db(win)
 
+        # Sync sequence so future peeks reflect at least this saved number
+        try:
+            inv_no = saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number']
+            prefix = settings.invoice_prefix
+            # Parse numeric suffix
+            suffix = inv_no.removeprefix(prefix)
+            n = int(''.join(ch for ch in suffix if ch.isdigit())) if suffix else 0
+            from app.data.db import get_session
+            with get_session() as s:
+                bump_sequence_to_at_least(prefix, n, s)
+        except Exception:
+            pass
+
         # Build overlay with minimal data shape expected by build_overlay
         overlay_data = {
             'invoice': {
@@ -165,6 +213,14 @@ def main() -> None:
         merge_with_template(out_overlay, out_final)
         out_overlay.unlink(missing_ok=True)
 
+        # After successful save + PDF, bump already done; set next number in UI
+        try:
+            from app.data.db import get_session
+            with get_session() as s:
+                win.inv_number.setText(peek_next_invoice_number(settings.invoice_prefix, s))
+        except Exception:
+            pass
+
         if do_print:
             print_pdf(str(out_final))
         else:
@@ -179,6 +235,7 @@ def main() -> None:
                     pass
 
     win.btn_save_draft.clicked.connect(on_save_draft)
+    win.btn_settings.clicked.connect(on_open_settings)
     win.btn_save_pdf.clicked.connect(lambda: on_save_pdf_and_optionally_print(False))
     win.btn_print.clicked.connect(lambda: on_save_pdf_and_optionally_print(True))
 
