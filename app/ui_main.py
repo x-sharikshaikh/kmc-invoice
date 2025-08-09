@@ -185,7 +185,16 @@ class MainWindow(QMainWindow):
         top.addWidget(info_card, 1)
         root_layout.addLayout(top)
 
-        # Line items table
+        # Line items area wrapped in a Card to match upper sections
+        items_card = QFrame()
+        items_card.setObjectName("Card")
+        items_layout = QVBoxLayout(items_card)
+        items_layout.setContentsMargins(12, 12, 12, 12)
+        items_layout.setSpacing(10)
+        items_title = QLabel("Items")
+        items_title.setObjectName("SectionTitle")
+        items_layout.addWidget(items_title)
+
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Sl.", "Description", "Qty", "Rate", "Amount"])
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -193,18 +202,22 @@ class MainWindow(QMainWindow):
         self.table.setAlternatingRowColors(True)
         # Ensure comfortable row height so text/editors aren't clipped
         try:
-            self.table.verticalHeader().setDefaultSectionSize(40)
+            self.table.verticalHeader().setDefaultSectionSize(44)
         except Exception:
             pass
         # Use delegate with insets so editors don't touch cell borders
         self.table.setItemDelegate(LineItemDelegate(self.table, inset=6))
-        # Column sizing: let Description take the remaining space, others fit to contents
+        # Column sizing: Description stretches; set sensible minimum widths for Qty/Rate
         try:
-            self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-            self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-            self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-            self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-            self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+            hdr = self.table.horizontalHeader()
+            hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            hdr.setSectionResizeMode(1, QHeaderView.Stretch)
+            hdr.setSectionResizeMode(2, QHeaderView.Interactive)
+            hdr.setSectionResizeMode(3, QHeaderView.Interactive)
+            hdr.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+            hdr.setMinimumSectionSize(70)
+            self.table.setColumnWidth(2, 80)   # Qty
+            self.table.setColumnWidth(3, 100)  # Rate
         except Exception:
             pass
         # Center and bold header text
@@ -212,16 +225,18 @@ class MainWindow(QMainWindow):
             self.table.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
         except Exception:
             pass
-        root_layout.addWidget(self.table)
+        items_layout.addWidget(self.table)
 
-        # Table buttons
+        # Table buttons (inside the card, aligned right)
         table_btns = QHBoxLayout()
         add_btn = QPushButton("Add Row")
         rm_btn = QPushButton("Remove Row")
         table_btns.addStretch(1)
         table_btns.addWidget(add_btn)
         table_btns.addWidget(rm_btn)
-        root_layout.addLayout(table_btns)
+        items_layout.addLayout(table_btns)
+
+        root_layout.addWidget(items_card)
 
         # Summary bottom-right
         summary = QHBoxLayout()
@@ -349,12 +364,13 @@ class MainWindow(QMainWindow):
         QWidget { font-size: 13px; background: #fafafa; color: #222; }
         QMainWindow>QWidget { background: #fafafa; }
     QFrame#Card { border: 1px solid #e0e0e0; border-radius: 10px; background: #ffffff; }
-    QLabel#SectionTitle { font-size: 14px; font-weight: 700; color: #333; padding: 0 2px 2px 2px; }
+    QLabel#SectionTitle { font-size: 14px; font-weight: 700; color: #333; padding: 2px 2px 0 2px; }
         QLabel { font-size: 13px; }
         QHeaderView::section {
             font-size: 14px; padding: 8px; font-weight: 600; background: #f2f2f2; border: 0px; border-bottom: 1px solid #ddd;
         }
-        QTableWidget { border: 1px solid #e0e0e0; border-radius: 10px; background: #ffffff; gridline-color: #ececec; }
+        /* Table inside card: remove outer border so the card provides it */
+        QTableWidget { border: 0; border-radius: 8px; background: #ffffff; gridline-color: #ececec; }
         QTableView { outline: 0; }
         QTableView::item:focus { outline: none; }
         QTableWidget::item { padding: 6px 8px; }
@@ -390,13 +406,14 @@ class MainWindow(QMainWindow):
         QWidget { font-size: 13px; background: #2b2b2b; color: #f0f0f0; }
         QMainWindow>QWidget { background: #2b2b2b; }
     QFrame#Card { border: 1px solid #3d3d3d; border-radius: 10px; background: #2f2f2f; }
-    QLabel#SectionTitle { font-size: 14px; font-weight: 700; color: #f0f0f0; padding: 0 2px 2px 2px; }
+    QLabel#SectionTitle { font-size: 14px; font-weight: 700; color: #f0f0f0; padding: 2px 2px 0 2px; }
         QLabel { font-size: 13px; color: #f0f0f0; }
         QHeaderView::section {
             font-size: 14px; padding: 8px; font-weight: 600; background: #3a3a3a; border: 0px; border-bottom: 1px solid #444;
             color: #f0f0f0;
         }
-        QTableWidget { border: 1px solid #3d3d3d; border-radius: 10px; background: #2f2f2f; gridline-color: #444; }
+        /* Table inside card: remove outer border so the card provides it */
+        QTableWidget { border: 0; border-radius: 8px; background: #2f2f2f; gridline-color: #444; }
         QTableView { outline: 0; }
         QTableView::item:focus { outline: none; }
         QTableWidget::item { padding: 6px 8px; }
@@ -459,16 +476,22 @@ class MainWindow(QMainWindow):
         # Sl.
         sl = QTableWidgetItem(str(r + 1))
         sl.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+        sl.setTextAlignment(Qt.AlignCenter)
         self.table.setItem(r, 0, sl)
         # Description
         self.table.setItem(r, 1, QTableWidgetItem(""))
         # Qty
-        self.table.setItem(r, 2, QTableWidgetItem("0"))
+        qty_it = QTableWidgetItem("0")
+        qty_it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.table.setItem(r, 2, qty_it)
         # Rate
-        self.table.setItem(r, 3, QTableWidgetItem("0.00"))
+        rate_it = QTableWidgetItem("0.00")
+        rate_it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.table.setItem(r, 3, rate_it)
         # Amount (read-only)
         amt = QTableWidgetItem("0.00")
         amt.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+        amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.table.setItem(r, 4, amt)
 
     def remove_selected_rows(self) -> None:
@@ -494,7 +517,10 @@ class MainWindow(QMainWindow):
             # Set amount without re-triggering
             self.table.blockSignals(True)
             if self.table.item(r, 4) is None:
-                self.table.setItem(r, 4, QTableWidgetItem(fmt_money(amt_val)))
+                amt_item = QTableWidgetItem(fmt_money(amt_val))
+                amt_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                amt_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.table.setItem(r, 4, amt_item)
             else:
                 self.table.item(r, 4).setText(fmt_money(amt_val))
             self.table.blockSignals(False)
