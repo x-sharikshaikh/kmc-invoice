@@ -314,6 +314,40 @@ class MainWindow(QMainWindow):
             app.setStyleSheet("")
         self.setStyleSheet(ss)
 
+    def apply_dark_styles(self) -> None:
+        """Apply modern dark theme via QSS (pairs with optional qdarkstyle)."""
+        ss = """
+        QWidget { font-size: 13px; background: #2b2b2b; color: #f0f0f0; }
+        QMainWindow>QWidget { background: #2b2b2b; }
+        QGroupBox {
+            font-size: 14px; font-weight: 600;
+            border: 1px solid #3d3d3d; border-radius: 10px; margin-top: 16px;
+            background: #2f2f2f;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin; left: 12px; top: -10px; padding: 0 6px;
+            background: #2b2b2b; color: #f0f0f0;
+        }
+        QLabel { font-size: 13px; color: #f0f0f0; }
+        QHeaderView::section {
+            font-size: 14px; padding: 8px; font-weight: 600; background: #3a3a3a; border: 0px; border-bottom: 1px solid #444;
+            color: #f0f0f0;
+        }
+        QTableWidget { border: 1px solid #3d3d3d; border-radius: 10px; background: #2f2f2f; gridline-color: #444; }
+        QLineEdit, QTextEdit, QDateEdit {
+            border: 1px solid #555; border-radius: 10px; padding: 8px; background: #3a3a3a; color: #f0f0f0;
+            selection-background-color: #5b8def; selection-color: #ffffff;
+        }
+        QLineEdit:focus, QTextEdit:focus, QDateEdit:focus { border: 1px solid #7aa2ff; }
+        QPushButton {
+            padding: 9px 16px; border-radius: 10px; border: 1px solid #555; background: #3a3a3a; color: #f0f0f0;
+        }
+        QPushButton:hover { background: #414141; border-color: #6a6a6a; }
+        QPushButton:pressed { background: #3c3c3c; }
+        """
+        # Layer our dark QSS, optionally on top of qdarkstyle (if applied at app level)
+        self.setStyleSheet(ss)
+
     def _apply_shadow(self, widget: QWidget) -> None:
         try:
             shadow = QGraphicsDropShadowEffect(self)
@@ -326,20 +360,22 @@ class MainWindow(QMainWindow):
 
     def _on_toggle_theme(self, checked: bool) -> None:
         self.dark_mode = bool(checked)
+        app = QApplication.instance()
         if self.dark_mode:
-            # Apply QDarkStyle if available
+            # Optionally apply qdarkstyle at app level, then layer our dark QSS
             try:
                 import qdarkstyle  # type: ignore
-                app = QApplication.instance()
                 if app:
                     app.setStyleSheet(qdarkstyle.load_stylesheet_pyside6())
-                # Light per-widget stylesheet may conflict; clear it
-                self.setStyleSheet("")
             except Exception:
-                # Fallback: keep light if qdarkstyle missing
-                self.btn_theme.setChecked(False)
-                self.apply_styles()
+                # If qdarkstyle not available, ensure no app-level style conflicts
+                if app:
+                    app.setStyleSheet("")
+            self.apply_dark_styles()
         else:
+            # Clear any app-level stylesheet and apply our light theme
+            if app:
+                app.setStyleSheet("")
             self.apply_styles()
 
     def add_row(self) -> None:
