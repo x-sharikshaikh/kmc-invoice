@@ -12,9 +12,9 @@ from app.ui_main import create_main_window
 from app.core.settings import load_settings
 from app.data.db import create_db_and_tables
 from app.data.repo import get_or_create_customer, create_invoice
-from app.printing.print_windows import print_pdf
+from app.printing.print_windows import print_pdf, open_file
 from app.pdf.pdf_overlay import build_invoice_pdf
-from app.pdf.pdf_merge import merge_overlay_with_template
+from app.pdf.pdf_merge import merge_with_template
 
 
 SAVE_DIR = Path.home() / "Documents" / "KMC Invoices"
@@ -152,17 +152,14 @@ def main() -> None:
         out_final = out_dir / f"{data['invoice']['number']}.pdf"
 
         build_invoice_pdf(data, out_overlay)
-        template = Path(data["settings"]["template"]) if data["settings"]["template"] else None
-        if template and template.exists():
-            merge_overlay_with_template(template, out_overlay, out_final)
-            out_overlay.unlink(missing_ok=True)
-        else:
-            # No template; use overlay as final
-            out_final.write_bytes(out_overlay.read_bytes())
-            out_overlay.unlink(missing_ok=True)
+        # Always try to merge with the bundled template; function will fallback if missing
+        merge_with_template(out_overlay, out_final)
+        out_overlay.unlink(missing_ok=True)
 
         if do_print:
             print_pdf(str(out_final))
+        else:
+            open_file(str(out_final))
 
     win.btn_save_draft.clicked.connect(on_save_draft)
     win.btn_save_pdf.clicked.connect(lambda: on_save_pdf_and_optionally_print(False))

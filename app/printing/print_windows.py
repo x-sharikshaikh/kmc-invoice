@@ -47,3 +47,33 @@ def print_pdf(path: str, parent: Optional[QWidget] = None) -> bool:
 		_show_warning(f"Unexpected error while printing:\n{e}", parent)
 		return False
 
+
+def open_file(path: str, parent: Optional[QWidget] = None) -> bool:
+	"""Open a file with the default associated application on Windows.
+
+	Uses os.startfile(path). Shows a friendly warning on errors. Returns True on dispatch.
+	"""
+	if sys.platform != "win32":
+		_show_warning("Opening files is supported on Windows only.", parent, title="Open error")
+		return False
+
+	p = Path(path)
+	if not p.exists():
+		_show_warning(f"File not found:\n{p}", parent, title="Open error")
+		return False
+
+	try:
+		os.startfile(str(p))  # type: ignore[attr-defined]
+		return True
+	except OSError:
+		_show_warning(
+			"Unable to open the file.\n\n"
+			"Ensure a default application is associated with this file type.",
+			parent,
+			title="Open error",
+		)
+		return False
+	except Exception as e:
+		_show_warning(f"Unexpected error while opening file:\n{e}", parent, title="Open error")
+		return False
+
