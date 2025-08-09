@@ -280,11 +280,23 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
 
 
 def _draw_totals(c: Canvas, font: str, data: Dict[str, Any], y: float) -> float:
-    sub = float(data.get("subtotal", 0) or 0)
-    tax = float(data.get("tax", 0) or 0)
-    total = float(data.get("total", sub + tax))
+    # Compute subtotal from items to verify consistency
+    items = list(data.get("items", []) or [])
+    sub_val = 0.0
+    for it in items:
+        try:
+            qty = float(it.get("qty", 0) or 0)
+            rate = float(it.get("rate", 0) or 0)
+            amount = float(it.get("amount", qty * rate))
+        except Exception:
+            amount = 0.0
+        sub_val += amount
+    # Round to 2 decimals
+    sub = round(sub_val + 0.0, 2)
     # Prefer invoice.tax_rate then settings.tax_rate
     tax_rate = float((_get(data, "invoice.tax_rate", None) or _get(data, "settings.tax_rate", 0) or 0))
+    tax = round(sub * tax_rate, 2)
+    total = round(sub + tax, 2)
 
     # separator line above totals
     _line(c, SL_X, y, TABLE_RIGHT, y)
