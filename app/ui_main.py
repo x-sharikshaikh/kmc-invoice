@@ -4,7 +4,7 @@ from datetime import date as _date
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtGui import QFont, QPixmap, QColor, QBrush
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -246,6 +246,87 @@ class MainWindow(QMainWindow):
                 self.table.item(r, 4).setText(fmt_money(amt_val))
             self.table.blockSignals(False)
             self._recalc_subtotal_tax_total()
+
+    # --- Validation helpers ---
+    def _clear_validation_styles(self) -> None:
+        # Reset edits
+        for w in (self.name_edit, self.phone_edit, self.addr_edit):
+            w.setStyleSheet("")
+        # Reset table cell backgrounds for Description/Qty/Rate
+        rows = self.table.rowCount()
+        for r in range(rows):
+            for c in (1, 2, 3):
+                it = self.table.item(r, c)
+                if it:
+                    it.setBackground(QBrush())
+
+    def _mark_cell_invalid(self, row: int, col: int) -> None:
+        it = self.table.item(row, col)
+        if not it:
+            it = QTableWidgetItem("")
+            self.table.setItem(row, col, it)
+        it.setBackground(QColor(255, 230, 230))  # light red
+
+    def validate_form(self) -> list[str]:
+        """Validate required fields and highlight invalid cells. Returns issue strings."""
+        self._clear_validation_styles()
+        issues: list[str] = []
+
+        # Required: Customer name
+        if not self.name_edit.text().strip():
+            self.name_edit.setStyleSheet("border: 1px solid #e07070;")
+            issues.append("Customer name is required.")
+
+        # Validate line items
+        rows = self.table.rowCount()
+        valid_row_found = False
+        for r in range(rows):
+            desc = (self.table.item(r, 1).text().strip() if self.table.item(r, 1) else "")
+            qty_text = (self.table.item(r, 2).text().strip() if self.table.item(r, 2) else "")
+            rate_text = (self.table.item(r, 3).text().strip() if self.table.item(r, 3) else "")
+
+            # Consider row empty if all blank/zero
+            def _to_float(t: str) -> float | None:
+                try:
+                    return float(t) if t != "" else 0.0
+                except Exception:
+                    return None
+
+            qty = _to_float(qty_text)
+            rate = _to_float(rate_text)
+
+            is_empty = (desc == "" and (qty_text == "" or qty == 0.0) and (rate_text == "" or rate == 0.0))
+            if is_empty:
+                continue
+
+            row_ok = True
+            if not desc:
+                self._mark_cell_invalid(r, 1)
+                issues.append(f"Row {r+1}: Description is required.")
+                row_ok = False
+            if qty is None:
+                self._mark_cell_invalid(r, 2)
+                issues.append(f"Row {r+1}: Qty must be a number.")
+                row_ok = False
+            elif qty <= 0:
+                self._mark_cell_invalid(r, 2)
+                issues.append(f"Row {r+1}: Qty must be > 0.")
+                row_ok = False
+            if rate is None:
+                self._mark_cell_invalid(r, 3)
+                issues.append(f"Row {r+1}: Rate must be a number.")
+                row_ok = False
+            elif rate <= 0:
+                self._mark_cell_invalid(r, 3)
+                issues.append(f"Row {r+1}: Rate must be > 0.")
+                row_ok = False
+
+            valid_row_found = valid_row_found or row_ok
+
+        if not valid_row_found:
+            issues.append("At least one valid line item is required (description, qty > 0, rate > 0).")
+
+        return issues
 
 
 def create_main_window() -> QMainWindow:

@@ -6,7 +6,7 @@ from typing import List, Dict, Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut
-from PySide6.QtWidgets import QApplication, QTableWidgetItem
+from PySide6.QtWidgets import QApplication, QTableWidgetItem, QMessageBox
 
 from app.ui_main import create_main_window
 from app.core.settings import load_settings
@@ -113,9 +113,17 @@ def main() -> None:
 
     # Wire footer buttons
     def on_save_draft():
+        issues = win.validate_form() if hasattr(win, 'validate_form') else []
+        if issues:
+            QMessageBox.warning(win, "Fix form errors", "\n".join(f"• {m}" for m in issues))
+            return
         _save_draft_to_db(win)
 
     def on_save_pdf_and_optionally_print(do_print: bool = False):
+        issues = win.validate_form() if hasattr(win, 'validate_form') else []
+        if issues:
+            QMessageBox.warning(win, "Fix form errors", "\n".join(f"• {m}" for m in issues))
+            return
         saved = _save_draft_to_db(win)
         data = {
             "business": {
