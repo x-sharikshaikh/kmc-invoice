@@ -1,20 +1,13 @@
 {
-  "appName": "KMC Invoice",
-  "use_template_overlay": false,
-  "database": {
-    "path": "app/data/invoices.sqlite3"
-  },
-  "currency": {
-    "code": "USD",
-    "symbol": "$",
-    "locale": "en_US"
-  },
-  "printing": {
-    "defaultPrinter": null,
-    "dpi": 300
-  },
-  "pdf": {
-    "logoPath": "assets/logo.png",
-    "fontRegular": "assets/fonts/NotoSans-Regular.ttf"
-  }
+  "business_name": "KMC Electrical",
+  "owner": "SHAIKH MO.AJAZ",
+  "phone": "9998714499",
+  "permit": "G-GW-E-000025-NTC(W)2018",
+  "pan": "DTPPS1809N",
+  "cheque_to": "Shaikh Mo.Ajaz",
+  "thank_you": "Thank you for choosing KMC!",
+  "invoice_prefix": "KMC-",
+  "tax_rate": 0.0,
+  "logo_path": "assets/logo.png",
+  "use_template_overlay": false
 }

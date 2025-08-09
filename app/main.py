@@ -113,6 +113,18 @@ def main() -> None:
 
     win = create_main_window()
 
+    # Allow reloading settings from disk at runtime (e.g., after external edits)
+    def _reload_settings_from_disk() -> None:
+        nonlocal settings
+        new_settings = load_settings()
+        settings = new_settings
+        # Update UI-bound settings too
+        if hasattr(win, 'refresh_settings'):
+            try:
+                win.refresh_settings(new_settings)
+            except Exception:
+                pass
+
     # Initialize invoice number on load (peek next)
     try:
         from app.data.db import get_session
@@ -127,6 +139,8 @@ def main() -> None:
     except Exception:
         pass
     def on_save_draft():
+        # Ensure settings reflect latest on-disk config
+        _reload_settings_from_disk()
         issues = win.validate_form() if hasattr(win, 'validate_form') else []
         if issues:
             QMessageBox.warning(win, "Fix form errors", "\n".join(f"• {m}" for m in issues))
@@ -164,6 +178,8 @@ def main() -> None:
                 win.refresh_settings(new_settings)
 
     def on_save_pdf_and_optionally_print(do_print: bool = False):
+        # Ensure settings reflect latest on-disk config
+        _reload_settings_from_disk()
         issues = win.validate_form() if hasattr(win, 'validate_form') else []
         if issues:
             QMessageBox.warning(win, "Fix form errors", "\n".join(f"• {m}" for m in issues))

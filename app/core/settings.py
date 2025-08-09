@@ -25,6 +25,8 @@ class Settings:
 	tax_rate: float = 0.00
 	# Optional absolute/relative path to a logo image
 	logo_path: Optional[str] = None
+	# Optional legacy mode to use template overlay
+	use_template_overlay: bool = False
 
 	@classmethod
 	def from_dict(cls, data: Dict[str, Any]) -> "Settings":
