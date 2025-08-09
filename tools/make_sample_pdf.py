@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from app.pdf.pdf_overlay import build_overlay
-from app.pdf.pdf_merge import merge_overlay_with_template
 from app.core.paths import resource_path
 
 # Generates a redacted sample invoice PDF for README/demo purposes.
@@ -10,11 +9,8 @@ from app.core.paths import resource_path
 def main() -> None:
     out_dir = Path(__file__).resolve().parents[1] / "assets" / "samples"
     out_dir.mkdir(parents=True, exist_ok=True)
-    overlay = out_dir / "sample-overlay.pdf"
-    out_pdf = out_dir / "sample-redacted.pdf"
-
-    # Use provided template in assets; falls back if missing
-    template = resource_path("assets/template.pdf")
+    overlay = out_dir / "sample-redacted.pdf"
+    out_pdf = overlay
 
     sample = {
         "business": {
@@ -42,11 +38,6 @@ def main() -> None:
     }
 
     build_overlay(overlay, sample)
-    if template.exists():
-        merge_overlay_with_template(template, overlay, out_pdf)
-    else:
-        # If template missing, just copy overlay
-        out_pdf.write_bytes(overlay.read_bytes())
 
     print(f"Wrote sample to: {out_pdf}")
 

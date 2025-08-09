@@ -13,8 +13,7 @@ from app.core.settings import load_settings, save_settings, Settings
 from app.data.db import create_db_and_tables
 from app.data.repo import get_or_create_customer, create_invoice
 from app.printing.print_windows import print_pdf, open_file
-from app.pdf.pdf_overlay import build_overlay
-from app.pdf.pdf_merge import merge_with_template
+from app.pdf.pdf_draw import build_invoice_pdf
 from app.core.numbering import bump_sequence_to_at_least, peek_next_invoice_number
 
 
@@ -112,6 +111,14 @@ def main() -> None:
 
     win = create_main_window()
 
+    # Initialize invoice number on load (peek next)
+    try:
+        from app.data.db import get_session
+        with get_session() as s:
+            win.inv_number.setText(peek_next_invoice_number(settings.invoice_prefix, s))
+    except Exception:
+        pass
+
     # Wire footer buttons
     try:
         win.btn_new_invoice.clicked.connect(win.new_invoice)
@@ -177,7 +184,11 @@ def main() -> None:
             }
 
         # Persist to DB
-        saved = _save_draft_to_db(win)
+        try:
+            saved = _save_draft_to_db(win)
+        except Exception as e:
+            QMessageBox.critical(win, "Save failed", f"Could not save invoice to the database.\n\nDetails: {e}")
+            return
 
         # Sync sequence so future peeks reflect at least this saved number
         try:
@@ -192,26 +203,48 @@ def main() -> None:
         except Exception:
             pass
 
-        # Build overlay with minimal data shape expected by build_overlay
-        overlay_data = {
-            'invoice': {
-                'number': saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number'],
-                'date': win.date_edit.date().toString("dd-MM-yyyy"),
-            },
-            'customer': collected['customer'],
-            'items': collected['items'],
-            'total': collected.get('total'),
-        }
-
+        # Build final PDF (code-drawn) directly
         out_dir = _ensure_save_dir()
-        inv_no = overlay_data['invoice']['number']
-        out_overlay = out_dir / f"{inv_no}_overlay.pdf"
+        inv_no = saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number']
         out_final = out_dir / f"{inv_no}.pdf"
 
-        build_overlay(out_overlay, overlay_data)
-        # Always try to merge with the bundled template; function will fallback if missing
-        merge_with_template(out_overlay, out_final)
-        out_overlay.unlink(missing_ok=True)
+        # Prepare data for the code-drawn generator
+        pdf_data = {
+            'customer': collected['customer'],
+            'invoice': {
+                'number': inv_no,
+                'date': (getattr(saved['invoice'], 'date', None) or win.date_edit.date().toString("dd-MM-yyyy")),
+                'tax_rate': settings.tax_rate,
+            },
+            'items': collected['items'],
+            'subtotal': saved.get('subtotal'),
+            'tax': saved.get('tax'),
+            'total': saved.get('total'),
+            'settings': {
+                'business_name': settings.business_name,
+                'owner': settings.owner,
+                'phone': settings.phone,
+                'permit': settings.permit,
+                'pan': settings.pan,
+                'cheque_to': settings.cheque_to,
+                'thank_you': settings.thank_you,
+                'invoice_prefix': settings.invoice_prefix,
+                'tax_rate': settings.tax_rate,
+                'logo_path': settings.logo_path,
+            },
+            'business': {
+                'permit': settings.permit,
+                'pan': settings.pan,
+                'cheque_to': settings.cheque_to,
+            },
+        }
+
+        # Build final PDF (code-drawn) directly
+        try:
+            build_invoice_pdf(out_final, pdf_data)
+        except Exception as e:
+            QMessageBox.critical(win, "PDF failed", f"Could not generate the PDF.\n\nDetails: {e}")
+            return
 
         # After successful save + PDF, bump already done; set next number in UI
         try:
@@ -222,17 +255,25 @@ def main() -> None:
             pass
 
         if do_print:
-            print_pdf(str(out_final))
+            try:
+                ok = print_pdf(str(out_final))
+                if ok is False:
+                    QMessageBox.warning(win, "Print issue", "The PDF was saved, but printing may have failed. Please print it manually.")
+            except Exception:
+                QMessageBox.warning(win, "Print issue", "The PDF was saved, but an error occurred while printing. Please print it manually.")
         else:
             # Open the PDF in default viewer; optionally open folder on failure
-            ok = open_file(str(out_final))
+            try:
+                ok = open_file(str(out_final))
+            except Exception:
+                ok = False
             if not ok:
                 # Try opening containing folder
                 try:
                     from subprocess import run
                     run(["explorer", "/select,", str(out_final)])
                 except Exception:
-                    pass
+                    QMessageBox.information(win, "Saved", f"Invoice saved to:\n{out_final}")
 
     win.btn_save_draft.clicked.connect(on_save_draft)
     win.btn_settings.clicked.connect(on_open_settings)

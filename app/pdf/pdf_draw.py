@@ -1,0 +1,547 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Tuple
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen.canvas import Canvas
+
+from app.core.paths import resource_path
+from app.core.currency import round_money, fmt_money
+
+
+# ===== Layout constants (tweak here) =====
+PAGE_SIZE = A4
+PAGE_WIDTH, PAGE_HEIGHT = PAGE_SIZE
+
+# Margins
+MARGIN_LEFT = 15 * mm
+MARGIN_RIGHT = 15 * mm
+MARGIN_TOP = 18 * mm
+MARGIN_BOTTOM = 18 * mm
+
+# Header
+HEADER_HEIGHT = 32 * mm
+LOGO_WIDTH = 36 * mm
+LOGO_HEIGHT = 24 * mm
+TITLE_FONT_SIZE = 22
+LABEL_FONT_SIZE = 10
+TEXT_FONT_SIZE = 10
+SMALL_FONT_SIZE = 9
+
+# Table columns (fit within content width = PAGE_WIDTH - margins = 180mm on A4 with 15mm margins)
+# Widths sum to 180mm: 10 + 102 + 18 + 24 + 26 = 180
+SL_W = 10 * mm
+DESC_W = 102 * mm
+QTY_W = 18 * mm
+RATE_W = 24 * mm
+AMT_W = 26 * mm
+
+SL_X = MARGIN_LEFT
+DESC_X = SL_X + SL_W
+QTY_X = DESC_X + DESC_W
+RATE_X = QTY_X + QTY_W
+AMT_X = RATE_X + RATE_W
+
+TABLE_RIGHT = AMT_X + AMT_W
+ROW_HEIGHT = 6 * mm
+HEADER_ROW_HEIGHT = 7 * mm
+TABLE_TOP_GAP = 6 * mm  # gap between info blocks and table header
+
+TOTALS_BLOCK_HEIGHT_MIN = 30 * mm  # ensure room before placing totals on same page
+THANK_YOU_GAP = 6 * mm
+SIGN_BOX_W = 50 * mm
+SIGN_BOX_H = 24 * mm
+ROW_BOTTOM_GAP = 4 * mm  # minimal bottom gap beyond page margin
+
+# Colors (print-friendly)
+TEXT_COLOR = colors.black
+RULE_COLOR = colors.black
+GRID_COLOR = colors.Color(0.6, 0.6, 0.6)  # medium gray for table grid
+
+
+# ===== Helpers =====
+def _register_fonts() -> Tuple[str, str]:
+    """Return (regular_font_name, bold_font_name)."""
+    regular = "Helvetica"
+    bold = "Helvetica-Bold"
+    try:
+        reg = resource_path("assets/fonts/NotoSans-Regular.ttf")
+        bld = resource_path("assets/fonts/NotoSans-Bold.ttf")
+        if reg.exists():
+            pdfmetrics.registerFont(TTFont("NotoSans", str(reg)))
+            regular = "NotoSans"
+        if bld.exists():
+            pdfmetrics.registerFont(TTFont("NotoSans-Bold", str(bld)))
+            bold = "NotoSans-Bold"
+    except Exception:
+        # fall back to Helvetica variants
+        pass
+    return regular, bold
+
+
+def _fmt_date(val: Any) -> str:
+    # Expecting datetime.date; accept string fallback
+    try:
+        import datetime as _dt
+
+        if isinstance(val, (_dt.date, _dt.datetime)):
+            return val.strftime("%d-%m-%Y")
+    except Exception:
+        pass
+    return str(val) if val is not None else ""
+
+
+def _get(d: Dict[str, Any], path: str, default: Any = "") -> Any:
+    cur: Any = d
+    for part in path.split("."):
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        else:
+            return default
+    return cur
+
+
+def _wrap_text(text: str, max_width: float, font_name: str, font_size: float) -> List[str]:
+    text = (text or "").replace("\r", "")
+    words = text.split()
+    lines: List[str] = []
+    line: List[str] = []
+    width_fn = pdfmetrics.stringWidth
+
+    for w in words:
+        trial = (" ".join(line + [w])).strip()
+        if width_fn(trial, font_name, font_size) <= max_width or not line:
+            line.append(w)
+        else:
+            lines.append(" ".join(line))
+            line = [w]
+    if line:
+        lines.append(" ".join(line))
+
+    # If the text has long unbroken sequences, hard-truncate per line end
+    truncated: List[str] = []
+    for ln in lines:
+        if width_fn(ln, font_name, font_size) <= max_width:
+            truncated.append(ln)
+        else:
+            # truncate with ellipsis
+            s = ln
+            while s and width_fn(s + "…", font_name, font_size) > max_width:
+                s = s[:-1]
+            truncated.append((s + "…") if s else ln)
+    return truncated
+
+
+def wrap_text(c: Canvas, text: str, max_width: float, font_name: str, font_size: float) -> List[str]:
+    """Wrap text into at most two lines within max_width, truncating with ellipsis.
+
+    Rules:
+    - Prefer 1 line; allow 2 lines max.
+    - If content overflows second line, hard-truncate the second line with an ellipsis.
+    - If a single word exceeds max_width, truncate that word with ellipsis on the first line.
+    - Returns a list of 1–2 strings.
+    """
+    s = (text or "").replace("\r", " ").replace("\n", " ")
+    s = " ".join(s.split())  # collapse whitespace
+    if not s:
+        return [""]
+
+    width = pdfmetrics.stringWidth
+
+    def fit_line(words: List[str]) -> Tuple[str, List[str], bool]:
+        # returns (line, remaining_words, overflowed)
+        if not words:
+            return "", [], False
+        line_words: List[str] = []
+        for i, w in enumerate(words):
+            trial = (" ".join(line_words + [w])).strip()
+            if not line_words and width(w, font_name, font_size) > max_width:
+                # single long word: truncate it to fit with ellipsis
+                cut = w
+                while cut and width(cut + "…", font_name, font_size) > max_width:
+                    cut = cut[:-1]
+                return (cut + "…") if cut else "…", words[i + 1 :], True
+            if width(trial, font_name, font_size) <= max_width:
+                line_words.append(w)
+            else:
+                # overflow; keep previous line_words
+                return " ".join(line_words), words[i:], True
+        return " ".join(line_words), [], False
+
+    words = s.split(" ")
+    line1, rem, of1 = fit_line(words)
+    if not rem:
+        return [line1]
+
+    # Build second line; if anything remains after fitting, append ellipsis and hard-trim
+    line2, rem2, of2 = fit_line(rem)
+    if rem2:
+        t = (line2 + " …").strip()
+        while t and width(t, font_name, font_size) > max_width:
+            t = t[:-2] + "…" if t.endswith(" …") else t[:-1]
+        return [line1, t if t else "…"]
+    return [line1, line2]
+
+
+def _fmt_qty(qty: float) -> str:
+    """Format quantity with up to 3 decimals, no trailing zeros."""
+    try:
+        s = f"{float(qty):.3f}".rstrip('0').rstrip('.')
+        return s if s else "0"
+    except Exception:
+        return str(qty)
+
+
+def _line(canvas: Canvas, x1: float, y1: float, x2: float, y2: float) -> None:
+    canvas.line(x1, y1, x2, y2)
+
+
+def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], first_page: bool) -> float:
+    top_y = PAGE_HEIGHT - MARGIN_TOP
+    c.setLineWidth(0.5)
+    c.setFillColor(TEXT_COLOR)
+
+    # Logo (left)
+    logo_path: Path | None = None
+    try:
+        settings = data.get("settings", {}) if isinstance(data.get("settings"), dict) else {}
+        lp = settings.get("logo_path") or settings.get("logo")
+        if lp:
+            p = Path(lp)
+            if not p.exists():
+                p = resource_path(lp) if isinstance(lp, str) else p
+            if p.exists():
+                logo_path = p
+    except Exception:
+        pass
+    if not logo_path:
+        # fallback to assets/logo.png if available
+        p = resource_path("assets/logo.png")
+        if p.exists():
+            logo_path = p
+
+    if logo_path and logo_path.exists():
+        try:
+            c.drawImage(str(logo_path), MARGIN_LEFT, top_y - LOGO_HEIGHT, width=LOGO_WIDTH, height=LOGO_HEIGHT, preserveAspectRatio=True, mask='auto')
+        except Exception:
+            pass
+
+    # Title "INVOICE" on the right (bold)
+    c.setFont(bold_font, TITLE_FONT_SIZE)
+    title_x = PAGE_WIDTH - MARGIN_RIGHT
+    c.drawRightString(title_x, top_y - 6, "INVOICE")
+
+    # A separating line below header
+    y = top_y - HEADER_HEIGHT
+    # Header rule slightly bolder
+    prev_w = c._linewidth
+    prev_stroke = getattr(c, '_strokeColor', None)
+    c.setStrokeColor(RULE_COLOR)
+    c.setLineWidth(1.0)
+    _line(c, MARGIN_LEFT, y, PAGE_WIDTH - MARGIN_RIGHT, y)
+    c.setLineWidth(prev_w)
+    if prev_stroke is not None:
+        c.setStrokeColor(prev_stroke)
+    return y
+
+
+def _draw_invoice_block(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> float:
+    c.setFont(font, LABEL_FONT_SIZE)
+    inv = data.get("invoice", {}) if isinstance(data.get("invoice"), dict) else {}
+    number = inv.get("number", "")
+    date_val = _fmt_date(inv.get("date"))
+
+    right_x = PAGE_WIDTH - MARGIN_RIGHT
+    y = y_top - 6 * mm
+    c.drawRightString(right_x, y, f"Number: {number}")
+    y -= 5 * mm
+    c.drawRightString(right_x, y, f"Date: {date_val}")
+    return y - 2 * mm
+
+
+def _draw_bill_to(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> float:
+    cust = data.get("customer", {}) if isinstance(data.get("customer"), dict) else {}
+    name = cust.get("name", "")
+    phone = cust.get("phone", "")
+    address = cust.get("address", "")
+
+    x = MARGIN_LEFT
+    y = y_top - 6 * mm
+    c.setFont(font, LABEL_FONT_SIZE)
+    c.drawString(x, y, "BILL TO")
+    y -= 5 * mm
+
+    c.setFont(font, TEXT_FONT_SIZE)
+    c.drawString(x, y, name)
+    y -= 4.2 * mm
+    if phone:
+        c.drawString(x, y, phone)
+        y -= 4.2 * mm
+    for ln in str(address or "").splitlines():
+        if not ln:
+            continue
+        c.drawString(x, y, ln)
+        y -= 4.2 * mm
+    return y - 2 * mm
+
+
+def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> float:
+    # Column titles
+    y = y_top
+    c.setFont(bold_font, TEXT_FONT_SIZE)
+    c.drawString(SL_X, y, "Sl.")
+    c.drawString(DESC_X, y, "Description")
+    c.drawRightString(QTY_X + QTY_W - 2, y, "Qty")
+    c.drawRightString(RATE_X + RATE_W - 2, y, "Rate")
+    c.drawRightString(AMT_X + AMT_W - 2, y, "Amount")
+
+    # Header underline and outer border line start
+    y -= 3
+    # Draw a bolder rule for header
+    prev_w = c._linewidth
+    prev_stroke = getattr(c, '_strokeColor', None)
+    c.setStrokeColor(RULE_COLOR)
+    c.setLineWidth(0.9)
+    _line(c, SL_X, y, TABLE_RIGHT, y)
+    c.setLineWidth(prev_w)
+    if prev_stroke is not None:
+        c.setStrokeColor(prev_stroke)
+    return y - (HEADER_ROW_HEIGHT - 3)
+
+
+def _ensure_table_within_page(c: Canvas, y_cursor: float, need_height: float) -> bool:
+    return (y_cursor - need_height) > (MARGIN_BOTTOM + TOTALS_BLOCK_HEIGHT_MIN)
+
+
+def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y: float) -> Tuple[float, int]:
+    y = start_y
+    c.setFont(font, TEXT_FONT_SIZE)
+    drawn = 0
+
+    # vertical column lines (draw progressively with rows)
+    # we’ll draw outer border lines as we go to keep crisp alignment
+    # lighter grid lines for body
+    prev_w = c._linewidth
+    prev_stroke = getattr(c, '_strokeColor', None)
+    c.setLineWidth(0.3)
+    c.setStrokeColor(GRID_COLOR)
+
+    for idx, it in enumerate(items, start=1):
+        desc = str(it.get("description", ""))
+        qty = float(it.get("qty", 0) or 0)
+        rate = float(it.get("rate", 0) or 0)
+        amount = float(it.get("amount", qty * rate))
+
+        wrapped = wrap_text(c, desc, DESC_W - 4, font, TEXT_FONT_SIZE)
+        line_count = max(1, len(wrapped))
+        row_h = line_count * ROW_HEIGHT
+
+        # if not enough space for this row above bottom margin, stop (totals handled later)
+        if y - row_h < (MARGIN_BOTTOM + ROW_BOTTOM_GAP):
+            break
+
+        # left/right verticals per row block
+        # draw text
+        row_top = y
+        # Sl. aligned to row baseline
+        c.drawString(SL_X + 2, y - row_h + 2, str(idx))
+        # Description multi-line
+        ty = y - ROW_HEIGHT + 2
+        for ln in wrapped:
+            c.drawString(DESC_X + 2, ty, ln)
+            ty -= ROW_HEIGHT
+        # numeric right aligned at row baseline so columns align across 1–2 line rows
+        baseline_y = y - row_h + 2
+        c.drawRightString(QTY_X + QTY_W - 2, baseline_y, _fmt_qty(qty))
+        c.drawRightString(RATE_X + RATE_W - 2, baseline_y, fmt_money(rate))
+        c.drawRightString(AMT_X + AMT_W - 2, baseline_y, fmt_money(amount))
+
+        # horizontal line under the row block (light)
+        _line(c, SL_X, y - row_h, TABLE_RIGHT, y - row_h)
+
+        # inner verticals for this row block (draw once; visually continuous across rows)
+        # left border
+        _line(c, SL_X, row_top, SL_X, y - row_h)
+        # columns splits
+        _line(c, DESC_X, row_top, DESC_X, y - row_h)
+        _line(c, QTY_X, row_top, QTY_X, y - row_h)
+        _line(c, RATE_X, row_top, RATE_X, y - row_h)
+        _line(c, AMT_X, row_top, AMT_X, y - row_h)
+        # right border
+        _line(c, TABLE_RIGHT, row_top, TABLE_RIGHT, y - row_h)
+
+        y -= row_h
+        drawn += 1
+
+    # restore previous line width and color
+    c.setLineWidth(prev_w)
+    if prev_stroke is not None:
+        c.setStrokeColor(prev_stroke)
+    return y, drawn
+
+
+def _draw_totals(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: float) -> float:
+    # Compute subtotal from items to verify consistency
+    items = list(data.get("items", []) or [])
+    sub_val = 0.0
+    for it in items:
+        try:
+            qty = float(it.get("qty", 0) or 0)
+            rate = float(it.get("rate", 0) or 0)
+            amount = float(it.get("amount", qty * rate))
+        except Exception:
+            amount = 0.0
+        sub_val += amount
+    # Round to 2 decimals
+    sub = round(sub_val + 0.0, 2)
+    # Prefer invoice.tax_rate then settings.tax_rate
+    tax_rate = float((_get(data, "invoice.tax_rate", None) or _get(data, "settings.tax_rate", 0) or 0))
+    tax = round(sub * tax_rate, 2)
+    total = round(sub + tax, 2)
+
+    # separator line above totals (slightly thicker)
+    prev_w = c._linewidth
+    prev_stroke = getattr(c, '_strokeColor', None)
+    c.setStrokeColor(RULE_COLOR)
+    c.setLineWidth(0.6)
+    _line(c, SL_X, y, TABLE_RIGHT, y)
+    c.setLineWidth(prev_w)
+    if prev_stroke is not None:
+        c.setStrokeColor(prev_stroke)
+    y -= 6
+
+    c.setFont(font, TEXT_FONT_SIZE)
+    c.drawRightString(RATE_X + RATE_W - 2, y, "Subtotal:")
+    c.drawRightString(AMT_X + AMT_W - 2, y, f"{sub:.2f}")
+    y -= ROW_HEIGHT
+
+    tax_label = f"Tax ({tax_rate:.0f}%)" if tax_rate else "Tax"
+    c.drawRightString(RATE_X + RATE_W - 2, y, f"{tax_label}:")
+    c.drawRightString(AMT_X + AMT_W - 2, y, f"{tax:.2f}")
+    y -= ROW_HEIGHT
+
+    c.setFont(bold_font, TEXT_FONT_SIZE + 1)
+    c.drawRightString(RATE_X + RATE_W - 2, y, "Total:")
+    c.drawRightString(AMT_X + AMT_W - 2, y, f"{total:.2f}")
+    y -= ROW_HEIGHT + THANK_YOU_GAP
+
+    # Thank you line
+    c.setFont(font, TEXT_FONT_SIZE)
+    thanks = (
+        _get(data, "settings.thank_you", None)
+        or _get(data, "business.thank_you", None)
+        or "Thank you for choosing KMC!"
+    )
+    # Ensure thank-you line sits above signature box area if space is tight
+    min_y = MARGIN_BOTTOM + SIGN_BOX_H + (8 * mm)
+    y_thanks = max(y, min_y)
+    c.drawString(MARGIN_LEFT, y_thanks, str(thanks))
+    return y_thanks - ROW_HEIGHT
+
+
+def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
+    y = MARGIN_BOTTOM + 6
+    x = MARGIN_LEFT
+    biz = data.get("business", {}) if isinstance(data.get("business"), dict) else {}
+    settings = data.get("settings", {}) if isinstance(data.get("settings"), dict) else {}
+    permit = biz.get("permit", "") or settings.get("permit", "") or _get(data, "invoice.permit", "")
+    pan = biz.get("pan", "") or settings.get("pan", "") or _get(data, "invoice.pan", "")
+    cheque_to = biz.get("cheque_to", "") or settings.get("cheque_to", "") or biz.get("chequeTo", "")
+
+    c.setFont(font, SMALL_FONT_SIZE)
+    if permit:
+        c.drawString(x, y, f"Permit: {permit}")
+        y += 11
+    if pan:
+        c.drawString(x, y, f"PAN: {pan}")
+        y += 11
+    if cheque_to:
+        c.drawString(x, y, f"Cheque to: {cheque_to}")
+
+    # Authorized Signatory box on right
+    bx = PAGE_WIDTH - MARGIN_RIGHT - SIGN_BOX_W
+    by = MARGIN_BOTTOM
+    prev_w = c._linewidth
+    prev_stroke = getattr(c, '_strokeColor', None)
+    c.setStrokeColor(RULE_COLOR)
+    c.setLineWidth(0.7)
+    c.rect(bx, by, SIGN_BOX_W, SIGN_BOX_H, stroke=1, fill=0)
+    c.setLineWidth(prev_w)
+    if prev_stroke is not None:
+        c.setStrokeColor(prev_stroke)
+    c.setFont(font, SMALL_FONT_SIZE)
+    c.drawCentredString(bx + SIGN_BOX_W / 2, by + 4, "Authorized Signatory")
+
+
+# ===== Public API =====
+def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
+    """Draw a complete invoice PDF using ReportLab (A4) with pagination.
+
+    Data shape (keys optional where noted):
+    {
+      "customer": {"name": str, "phone": str, "address": str},
+      "invoice": {"number": str, "date": date|str, "tax_rate": float},
+      "items": [{"description": str, "qty": float, "rate": float, "amount": float}, ...],
+      "subtotal": float, "tax": float, "total": float,
+      "settings"?: {"logo_path"?: str},
+      "business"?: {"permit"?: str, "pan"?: str, "cheque_to"?: str}
+    }
+    """
+
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    font, bold_font = _register_fonts()
+    c = Canvas(str(out), pagesize=PAGE_SIZE)
+    # Set author from business_name if provided in settings or business
+    author = _get(data, "settings.business_name", None) or _get(data, "business.name", None) or "KMC Invoice"
+    c.setAuthor(str(author))
+    c.setTitle(f"Invoice {str(_get(data, 'invoice.number', ''))}")
+    c.setLineWidth(0.5)
+    # Set default print-friendly colors
+    c.setFillColor(TEXT_COLOR)
+    c.setStrokeColor(RULE_COLOR)
+
+    items: List[Dict[str, Any]] = list(data.get("items", []) or [])
+
+    def new_page(first_page: bool) -> float:
+        y_after_header = _draw_header(c, font, bold_font, data, first_page)
+        info_y = _draw_invoice_block(c, font, data, y_after_header)
+        bill_y = _draw_bill_to(c, font, data, y_after_header)
+        table_start_y = min(info_y, bill_y) - TABLE_TOP_GAP
+        return _draw_table_header(c, font, bold_font, table_start_y)
+
+    y = new_page(first_page=True)
+
+    start_index = 0
+    while start_index < len(items):
+        y_before = y
+        y, drawn = _draw_table_rows(c, font, items[start_index:], y)
+        if drawn == 0:
+            # Not enough space for even one row; start a new page
+            c.showPage()
+            y = new_page(first_page=False)
+            continue
+        start_index += drawn
+
+        if start_index < len(items):
+            # More items remain; continue on next page
+            c.showPage()
+            y = new_page(first_page=False)
+        else:
+            # Last page: ensure there is room for totals; if not, move to fresh page
+            need = TOTALS_BLOCK_HEIGHT_MIN
+            if (y - need) < MARGIN_BOTTOM:
+                c.showPage()
+                y = new_page(first_page=False)
+            # Draw totals and footer
+            y = _draw_totals(c, font, bold_font, data, y)
+            _draw_footer(c, font, data)
+
+    c.showPage()
+    c.save()

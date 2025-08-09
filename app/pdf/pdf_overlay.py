@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+"""
+Deprecated module: overlay/merge pipeline is replaced by code-drawn PDFs.
+
+Keep this module only for backward compatibility and tooling. Prefer
+app.pdf.pdf_draw.build_invoice_pdf for new code.
+"""
+
 from pathlib import Path
 import json
 from typing import Any, Dict, Tuple, Iterable
+import warnings
 
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -43,10 +51,17 @@ def _register_font(ttf_path: Path | None) -> str:
 
 
 def build_invoice_pdf(data: Dict[str, Any], out_path: Path | str) -> None:
-	"""Create a simple overlay PDF for the invoice using reportlab.
+	"""Deprecated/unused: historical overlay-based invoice renderer.
+
+	Create a simple overlay PDF for the invoice using reportlab.
 
 	data expects keys: business, invoice, customer, items, subtotal, tax, total, settings{logo, template, font}
 	"""
+	warnings.warn(
+		"app.pdf.pdf_overlay.build_invoice_pdf is deprecated; use app.pdf.pdf_draw.build_invoice_pdf",
+		DeprecationWarning,
+		stacklevel=2,
+	)
 	out_path = Path(out_path)
 	settings = data.get("settings", {})
 	template_path = Path(settings.get("template")) if settings.get("template") else None
@@ -257,7 +272,7 @@ def _split_lines(text: str) -> Iterable[str]:
 
 
 def build_overlay(tmp_path: Path, data: Dict[str, Any]) -> None:
-	"""Write a simple A4 overlay PDF for invoice data.
+	"""Deprecated/unused: write an A4 overlay PDF for invoice data.
 
 	Expects data keys (direct or nested):
 	  - invoice_no or invoice.number
@@ -268,6 +283,12 @@ def build_overlay(tmp_path: Path, data: Dict[str, Any]) -> None:
 	  - items: list of {description, qty, rate, amount}
 	  - total (optional; if missing, computed from items)
 	"""
+	warnings.warn(
+		"app.pdf.pdf_overlay.build_overlay is deprecated; use app.pdf.pdf_draw.build_invoice_pdf",
+		DeprecationWarning,
+		stacklevel=2,
+	)
+
 	# Resolve font path
 	font_path = resource_path("assets/fonts/NotoSans-Regular.ttf")
 	font_name = _register_font(font_path if font_path.exists() else None)
