@@ -1,1 +1,49 @@
-# Placeholder for Windows printing helpers
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+from typing import Optional
+
+from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
+
+
+def _show_warning(message: str, parent: Optional[QWidget] = None, title: str = "Print error") -> None:
+	app = QApplication.instance()
+	if app is None:
+		# Fallback for non-GUI contexts
+		print(f"{title}: {message}", file=sys.stderr)
+		return
+	QMessageBox.warning(parent, title, message)
+
+
+def print_pdf(path: str, parent: Optional[QWidget] = None) -> bool:
+	"""Send a PDF to the default printer on Windows using the associated viewer.
+
+	Uses os.startfile(path, "print"). If no PDF print association exists or another
+	error occurs, a friendly message box is shown. Returns True on dispatch,
+	False otherwise.
+	"""
+	if sys.platform != "win32":
+		_show_warning("Printing is supported on Windows only.", parent)
+		return False
+
+	p = Path(path)
+	if not p.exists():
+		_show_warning(f"File not found:\n{p}", parent)
+		return False
+
+	try:
+		os.startfile(str(p), "print")  # type: ignore[attr-defined]
+		return True
+	except OSError as e:
+		# Common case: no application associated with printing PDFs
+		_show_warning(
+			"Unable to print the PDF.\n\n"
+			"Make sure a PDF viewer (e.g., Adobe Acrobat Reader) is installed and set as default for PDFs, "
+			"and that it supports the Print verb.")
+		return False
+	except Exception as e:  # Defensive catch-all
+		_show_warning(f"Unexpected error while printing:\n{e}", parent)
+		return False
+
