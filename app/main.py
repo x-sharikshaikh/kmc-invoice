@@ -18,6 +18,7 @@ from app.pdf.pdf_draw import build_invoice_pdf
 # from app.pdf.pdf_overlay import build_overlay as build_legacy_overlay  # deprecated
 # from app.pdf.pdf_merge import merge_with_template as merge_legacy      # deprecated
 import logging
+logger = logging.getLogger(__name__)
 from app.core.numbering import bump_sequence_to_at_least, peek_next_invoice_number
 
 
@@ -194,14 +195,16 @@ def main() -> None:
                 f"Could not create or access the save folder:\n{SAVE_DIR}\n\nDetails: {e}",
             )
             return
+        logger.info("Save/Print invoked (do_print=%s)", do_print)
         issues = win.validate_form() if hasattr(win, 'validate_form') else []
         if issues:
             QMessageBox.warning(win, "Fix form errors", "\n".join(f"• {m}" for m in issues))
             return
+        logger.info("Validation passed")
         # Collect UI data
         collected = win.collect_data() if hasattr(win, 'collect_data') else None
         if not collected:
-            # Fallback to legacy path
+            # Fallback to manual collection
             collected = {
                 'customer': {
                     'name': win.name_edit.text().strip(),
@@ -214,10 +217,19 @@ def main() -> None:
                 },
                 'items': _collect_items_from_table(win),
             }
+        try:
+            logger.info("Collected %s items", len(collected.get('items', [])))
+        except Exception:
+            logger.info("Collected items")
 
         # Persist to DB
         try:
             saved = _save_draft_to_db(win)
+            try:
+                inv_no_log = saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number']
+                logger.info("Saved invoice %s to DB", inv_no_log)
+            except Exception:
+                logger.info("Saved invoice to DB")
         except Exception as e:
             QMessageBox.critical(win, "Save failed", f"Could not save invoice to the database.\n\nDetails: {e}")
             return
@@ -235,7 +247,7 @@ def main() -> None:
         except Exception:
             pass
 
-    # Build final PDF (code-drawn) directly
+        # Build final PDF (code-drawn) directly
         inv_no = saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number']
         out_final = out_dir / f"{inv_no}.pdf"
 
@@ -274,7 +286,9 @@ def main() -> None:
         try:
             if getattr(settings, 'use_template_overlay', False):
                 logging.warning("use_template_overlay is deprecated and ignored; using code-drawn PDF path.")
+            logger.info("Building PDF: %s", out_final)
             build_invoice_pdf(out_final, pdf_data)
+            logger.info("PDF built: %s", out_final)
         except Exception as e:
             QMessageBox.critical(win, "PDF failed", f"Could not generate the PDF.\n\nDetails: {e}")
             return
