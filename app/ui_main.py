@@ -19,9 +19,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QTextEdit,
     QDateEdit,
-    # QTableWidget,
-    # QTableWidgetItem,
-    QStyledItemDelegate,
+    # Removed table-related widgets and delegates after migrating to LineItemsWidget
     QPushButton,
     QSpacerItem,
     QSizePolicy,
@@ -34,25 +32,6 @@ from app.core.numbering import next_invoice_number, peek_next_invoice_number
 from app.data.db import create_db_and_tables, get_session
 from app.core.paths import resource_path
 from app.widgets.line_items_widget import LineItemsWidget
-
-
-class LineItemDelegate(QStyledItemDelegate):
-    """Inset, styled editors for table cells to match card inputs."""
-    def __init__(self, parent=None, inset: int = 6):
-        super().__init__(parent)
-        self._inset = inset
-
-    def createEditor(self, parent, option, index):
-        ed = QLineEdit(parent)
-        ed.setObjectName("CellEditor")
-        # Right-align numeric columns (Qty=2, Rate=3)
-        if index.column() in (2, 3):
-            ed.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        return ed
-
-    def updateEditorGeometry(self, editor, option, index):
-        r = option.rect.adjusted(self._inset, self._inset, -self._inset, -self._inset)
-        editor.setGeometry(r)
 
 
 class MainWindow(QMainWindow):
@@ -350,6 +329,9 @@ class MainWindow(QMainWindow):
         QWidget { font-size: 13px; background: #fafafa; color: #222; }
         QMainWindow>QWidget { background: #fafafa; }
     QFrame#Card { border: 1px solid #e0e0e0; border-radius: 10px; background: #ffffff; }
+    /* Row mini-card inside Items */
+    QFrame#CardRow { border: 1px solid #e5e5e5; border-radius: 8px; background: #ffffff; padding: 8px; }
+    QFrame#CardRow:focus-within { border-color: #5b8def; }
     QLabel#SectionTitle { font-size: 14px; font-weight: 700; color: #333; padding: 2px 2px 0 2px; }
         QLabel { font-size: 13px; }
         QHeaderView::section {
@@ -357,7 +339,7 @@ class MainWindow(QMainWindow):
         }
         /* Inputs: make them consistent with card styling */
         QLineEdit, QTextEdit, QDateEdit, QDoubleSpinBox {
-            border: 1px solid #cfcfcf; border-radius: 10px; padding: 8px; background: #ffffff;
+            border: 1px solid #cfcfcf; border-radius: 8px; padding: 8px; background: #ffffff;
         }
     QDateEdit::drop-down { width: 20px; }
     QDateEdit::down-button, QDateEdit::up-button { width: 16px; }
@@ -380,6 +362,9 @@ class MainWindow(QMainWindow):
         QWidget { font-size: 13px; background: #2b2b2b; color: #f0f0f0; }
         QMainWindow>QWidget { background: #2b2b2b; }
     QFrame#Card { border: 1px solid #3d3d3d; border-radius: 10px; background: #2f2f2f; }
+    /* Row mini-card inside Items */
+    QFrame#CardRow { border: 1px solid #555; border-radius: 8px; background: #3a3a3a; padding: 8px; }
+    QFrame#CardRow:focus-within { border-color: #7aa2ff; }
     QLabel#SectionTitle { font-size: 14px; font-weight: 700; color: #f0f0f0; padding: 2px 2px 0 2px; }
         QLabel { font-size: 13px; color: #f0f0f0; }
         QHeaderView::section {
@@ -398,13 +383,13 @@ class MainWindow(QMainWindow):
         }
         QLineEdit#CellEditor:focus { border: 1px solid #7aa2ff; }
         QTableView::item:selected { background: transparent; }
-        QLineEdit, QTextEdit, QDateEdit {
-            border: 1px solid #555; border-radius: 10px; padding: 8px; background: #3a3a3a; color: #f0f0f0;
+        QLineEdit, QTextEdit, QDateEdit, QDoubleSpinBox {
+            border: 1px solid #555; border-radius: 8px; padding: 8px; background: #3a3a3a; color: #f0f0f0;
             selection-background-color: #5b8def; selection-color: #ffffff;
         }
     QDateEdit::drop-down { width: 20px; }
     QDateEdit::down-button, QDateEdit::up-button { width: 16px; }
-        QLineEdit:focus, QTextEdit:focus, QDateEdit:focus { border: 1px solid #7aa2ff; }
+    QLineEdit:focus, QTextEdit:focus, QDateEdit:focus, QDoubleSpinBox:focus { border: 1px solid #7aa2ff; }
         QPushButton {
             padding: 9px 16px; border-radius: 10px; border: 1px solid #555; background: #3a3a3a; color: #f0f0f0;
         }

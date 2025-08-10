@@ -361,12 +361,22 @@ def main() -> None:
             pass
 
         if do_print:
+            ok = False
             try:
-                ok = print_pdf(str(out_final))
-                if ok is False:
-                    QMessageBox.warning(win, "Print issue", "The PDF was saved, but printing may have failed. Please print it manually.")
+                # Only attempt automatic printing on Windows
+                import sys as _sys
+                if _sys.platform == "win32":
+                    ok = print_pdf(str(out_final), parent=win)
+                else:
+                    ok = False
             except Exception:
-                QMessageBox.warning(win, "Print issue", "The PDF was saved, but an error occurred while printing. Please print it manually.")
+                ok = False
+            if not ok:
+                QMessageBox.information(
+                    win,
+                    "Manual print",
+                    "The PDF was saved, but automatic printing isn't available. Please open the PDF and print it manually.",
+                )
         else:
             # Open the PDF in default viewer; optionally open folder on failure
             try:

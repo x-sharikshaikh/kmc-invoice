@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QScrollArea,
     QPushButton,
+    QFrame,
 )
 
 from app.core.currency import round_money, fmt_money
@@ -39,7 +40,18 @@ class LineItemRow(QWidget):
         super().__init__(parent)
         self.row_number = row_number
 
-        layout = QHBoxLayout(self)
+        # Outer container uses a mini-card frame
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        frame = QFrame(self)
+        frame.setObjectName("CardRow")
+        frame_v = QVBoxLayout(frame)
+        frame_v.setContentsMargins(0, 0, 0, 0)
+        frame_v.setSpacing(0)
+
+        layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
@@ -82,6 +94,10 @@ class LineItemRow(QWidget):
         # Recalc when qty or rate changes
         self.qty_spin.valueChanged.connect(self._recalc)
         self.rate_spin.valueChanged.connect(self._recalc)
+
+        # Compose frame
+        frame_v.addLayout(layout)
+        outer.addWidget(frame)
 
     def _recalc(self) -> None:
         amt = round_money(self.qty_spin.value() * self.rate_spin.value())
