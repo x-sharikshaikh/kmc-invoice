@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from app.core.currency import fmt_money, round_money
 from app.core.settings import load_settings, Settings
-from app.widgets.line_items_table import LineItemsTable
+from app.widgets.line_items_widget import LineItemsWidget
 
 
 class InvoiceForm(QWidget):
@@ -67,8 +67,8 @@ class InvoiceForm(QWidget):
 		top.addWidget(info_group, 1)
 		root.addLayout(top)
 
-		# Line items table
-		self.table = LineItemsTable(self)
+		# Line items widget (rows-based)
+		self.table = LineItemsWidget(self)
 		root.addWidget(self.table)
 
 		# Totals area (right aligned)
@@ -87,7 +87,7 @@ class InvoiceForm(QWidget):
 		row_tax.addWidget(self.tax_lbl, 0, Qt.AlignRight)
 
 		row_total = QHBoxLayout()
-		total_label = QLabel("Total:")
+		total_label = QLabel("Total:" )
 		total_label.setStyleSheet("font-weight: 600; font-size: 14px;")
 		self.total_lbl = QLabel("0.00")
 		self.total_lbl.setStyleSheet("font-weight: 700; font-size: 14px;")
@@ -103,7 +103,7 @@ class InvoiceForm(QWidget):
 		# Connect signals
 		self.table.totalsChanged.connect(self._on_subtotal_changed)
 
-		# Start with one row
+		# Start with one row (LineItemsWidget already adds one by default; keep explicit call harmless)
 		self.table.add_row()
 
 	# External helpers
@@ -114,7 +114,8 @@ class InvoiceForm(QWidget):
 		self.table.add_row(*args, **kwargs)
 
 	def remove_selected_rows(self) -> None:
-		self.table.remove_selected_rows()
+		# Per-row remove buttons exist; keep stub for compatibility or future use
+		pass
 
 	def _on_subtotal_changed(self, subtotal: float) -> None:
 		tax = round_money(subtotal * float(self.settings.tax_rate))
@@ -125,25 +126,8 @@ class InvoiceForm(QWidget):
 		self.totalsChanged.emit(subtotal)
 
 	def _collect_items(self) -> List[Dict[str, Any]]:
-		rows = self.table.rowCount()
-		items: List[Dict[str, Any]] = []
-		for r in range(rows):
-			desc = self.table.item(r, self.table.COL_DESC)
-			qty = self.table.item(r, self.table.COL_QTY)
-			rate = self.table.item(r, self.table.COL_RATE)
-			amt = self.table.item(r, self.table.COL_AMT)
-			def _f(it):
-				try:
-					return float(it.text()) if it and it.text() else 0.0
-				except Exception:
-					return 0.0
-			items.append({
-				'description': (desc.text() if desc else '').strip(),
-				'qty': _f(qty),
-				'rate': _f(rate),
-				'amount': _f(amt),
-			})
-		return items
+		# Delegate to the new widget
+		return self.table.get_items()
 
 	def collect_data(self) -> Dict[str, Any]:
 		"""Collect form data suitable for PDF generation and DB save.
