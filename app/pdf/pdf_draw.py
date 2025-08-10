@@ -204,13 +204,18 @@ def _line(canvas: Canvas, x1: float, y1: float, x2: float, y2: float) -> None:
 
 
 def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], first_page: bool) -> float:
+    """
+    Draw the invoice header exactly like the desired template:
+    - Logo flush to the top margin
+    - Owner & phone on a single baseline aligned with INVOICE
+    - INVOICE right‑aligned on the same baseline
+    A thin rule is drawn below the header. Returns the y coordinate below the header.
+    """
     top_y = PAGE_HEIGHT - MARGIN_TOP
-    # Use a single baseline for header alignment
-    baseline_y = PAGE_HEIGHT - MARGIN_TOP - 6
     c.setLineWidth(0.5)
     c.setFillColor(TEXT_COLOR)
 
-    # Logo (left): prefer Settings.logo_path when it exists; else fallback to assets/logo.png; else skip
+    # Try to resolve logo path from settings or fallback asset
     logo_path: Path | None = None
     try:
         settings = data.get("settings", {}) if isinstance(data.get("settings"), dict) else {}
@@ -224,20 +229,21 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
             if p.exists():
                 logo_path = p
         if not logo_path:
-            # fallback to bundled asset
             p = resource_path("assets/logo.png")
             if p.exists():
                 logo_path = p
     except Exception:
         logo_path = None
 
+    # Position logo: flush to top margin
+    logo_x = MARGIN_LEFT
+    logo_y = top_y - LOGO_HEIGHT
     if logo_path and logo_path.exists():
         try:
-            # Place logo relative to the baseline
             c.drawImage(
                 str(logo_path),
-                MARGIN_LEFT,
-                baseline_y - LOGO_HEIGHT + 3,
+                logo_x,
+                logo_y,
                 width=LOGO_WIDTH,
                 height=LOGO_HEIGHT,
                 preserveAspectRatio=True,
@@ -246,45 +252,45 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
         except Exception:
             pass
 
-    # Owner (bold) and phone left-aligned to the right of the logo, on the baseline
+    # Define baseline for owner/phone and INVOICE relative to top margin.
+    # This baseline sits roughly 13mm below the top margin, which centres the text
+    # vertically on the 24mm logo.
+    baseline_y = top_y - 13 * mm
+
+    # Compute X positions
+    owner_x = MARGIN_LEFT + LOGO_WIDTH + 6  # start of owner text
+    title_x = PAGE_WIDTH - MARGIN_RIGHT     # right‑aligned for "INVOICE"
+
+    # Owner and phone (left‑aligned)
     try:
         owner = _get(data, "settings.owner", None) or _get(data, "business.owner", None) or ""
         phone = _get(data, "settings.phone", None) or _get(data, "business.phone", None) or ""
-        # Center the owner/phone block in the space between the logo and the INVOICE title area
-        left_x = MARGIN_LEFT + LOGO_WIDTH + 6
-        invoice_w = c.stringWidth("INVOICE", bold_font, TITLE_FONT_SIZE)
-        right_limit = (PAGE_WIDTH - MARGIN_RIGHT) - 6 - invoice_w
-        # Fallback to left alignment if there isn't enough room to center
-        center_x = left_x if right_limit <= left_x + 10 else (left_x + right_limit) / 2
-        owner_y = baseline_y - 1
         if owner:
             c.setFont(bold_font, OWNER_FONT_SIZE)
-            c.drawCentredString(center_x, owner_y, str(owner))
+            c.drawString(owner_x, baseline_y, str(owner))
         if phone:
             c.setFont(font, PHONE_FONT_SIZE)
-            # Match template: no space after colon
-            c.drawCentredString(center_x, owner_y - 9, f"Mobile No:{phone}")
+            c.drawString(owner_x, baseline_y - 4.5 * mm, f"Mobile No:{phone}")
     except Exception:
         pass
 
-    # Title "INVOICE" on the right (bold) at the same baseline
+    # Title "INVOICE" aligned on the same baseline as owner
     c.setFont(bold_font, TITLE_FONT_SIZE)
-    title_x = PAGE_WIDTH - MARGIN_RIGHT
-    c.drawRightString(title_x, baseline_y - 1, "INVOICE")
+    c.drawRightString(title_x, baseline_y, "INVOICE")
 
-    # A separating line below header
-    y = top_y - HEADER_HEIGHT
-    # Header rule slightly bolder
+    # Draw a horizontal rule below the header (full width)
+    line_y = top_y - HEADER_HEIGHT
     prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(1.0)
-    _line(c, MARGIN_LEFT, y, PAGE_WIDTH - MARGIN_RIGHT, y)
+    _line(c, MARGIN_LEFT, line_y, PAGE_WIDTH - MARGIN_RIGHT, line_y)
+    # Restore previous stroke settings
     if prev_w is not None:
         c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
-    return y
+    return line_y
 
 
 def _draw_invoice_block(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> float:
