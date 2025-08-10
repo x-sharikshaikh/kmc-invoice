@@ -205,6 +205,8 @@ def _line(canvas: Canvas, x1: float, y1: float, x2: float, y2: float) -> None:
 
 def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], first_page: bool) -> float:
     top_y = PAGE_HEIGHT - MARGIN_TOP
+    # Use a single baseline for header alignment
+    baseline_y = PAGE_HEIGHT - MARGIN_TOP - 8
     c.setLineWidth(0.5)
     c.setFillColor(TEXT_COLOR)
 
@@ -231,30 +233,37 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
 
     if logo_path and logo_path.exists():
         try:
-            c.drawImage(str(logo_path), MARGIN_LEFT, top_y - LOGO_HEIGHT, width=LOGO_WIDTH, height=LOGO_HEIGHT, preserveAspectRatio=True, mask='auto')
+            # Place logo relative to the baseline
+            c.drawImage(
+                str(logo_path),
+                MARGIN_LEFT,
+                baseline_y - LOGO_HEIGHT + 4,
+                width=LOGO_WIDTH,
+                height=LOGO_HEIGHT,
+                preserveAspectRatio=True,
+                mask='auto',
+            )
         except Exception:
             pass
 
-    # Title "INVOICE" on the right (bold)
-    c.setFont(bold_font, TITLE_FONT_SIZE)
-    title_x = PAGE_WIDTH - MARGIN_RIGHT
-    c.drawRightString(title_x, top_y - 6, "INVOICE")
-
-    # Owner (bold) and phone left-aligned to the right of the logo
+    # Owner (bold) and phone left-aligned to the right of the logo, on the baseline
     try:
         owner = _get(data, "settings.owner", None) or _get(data, "business.owner", None) or ""
         phone = _get(data, "settings.phone", None) or _get(data, "business.phone", None) or ""
         x_text = MARGIN_LEFT + LOGO_WIDTH + 6
-        y_owner = top_y - 4  # align top of name with top of logo area
         if owner:
             c.setFont(bold_font, OWNER_FONT_SIZE)
-            c.drawString(x_text, y_owner, str(owner))
-            y_owner -= 12
+            c.drawString(x_text, baseline_y, str(owner))
         if phone:
             c.setFont(font, PHONE_FONT_SIZE)
-            c.drawString(x_text, y_owner, f"Mobile No: {phone}")
+            c.drawString(x_text, baseline_y - 10, f"Mobile No: {phone}")
     except Exception:
         pass
+
+    # Title "INVOICE" on the right (bold) at the same baseline
+    c.setFont(bold_font, TITLE_FONT_SIZE)
+    title_x = PAGE_WIDTH - MARGIN_RIGHT
+    c.drawRightString(title_x, baseline_y, "INVOICE")
 
     # A separating line below header
     y = top_y - HEADER_HEIGHT
@@ -278,9 +287,9 @@ def _draw_invoice_block(c: Canvas, font: str, data: Dict[str, Any], y_top: float
     date_val = _fmt_date(inv.get("date"))
 
     right_x = PAGE_WIDTH - MARGIN_RIGHT
-    y = y_top - 6 * mm
+    y = y_top - 5 * mm
     c.drawRightString(right_x, y, f"Number: {number}")
-    y -= 5 * mm
+    y -= 4.2 * mm
     c.drawRightString(right_x, y, f"Date: {date_val}")
     return y - 2 * mm
 
@@ -400,7 +409,7 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
         # draw text
         row_top = y
         # Sl. aligned to row baseline
-        c.drawString(SL_X + 2, y - row_h + 2, str(idx))
+        c.drawString(SL_X + 2, y - row_h + 2, f"{idx}.")
         # Description multi-line
         ty = y - ROW_HEIGHT + 2
         for ln in wrapped:
@@ -445,82 +454,44 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
     return y, drawn
 
 
-def _draw_summary(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: float) -> float:
-    """Draw a single bordered summary row with a thick separator above.
-
-    - Computes total from items (no tax).
-    - Draws thick horizontal line at current y from SL_X to TABLE_RIGHT.
-    - Draws one row bordered on all sides with thank-you text on the left and Total on the right.
-    Returns the new y = y - ROW_HEIGHT.
-    """
-    # Compute total
-    items = list(data.get("items", []) or [])
-    total_val = 0.0
-    for it in items:
-        try:
-            qty = float(it.get("qty", 0) or 0)
-            rate = float(it.get("rate", 0) or 0)
-            amount = float(it.get("amount", qty * rate))
-        except Exception:
-            amount = 0.0
-        total_val += amount
-    total = round(total_val, 2)
-
-    # Thick separator line at current y
+def _draw_summary(c, font, bold_font, data, y):
+    # Draw a thin separator (same thickness as table grid)
     prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-    prev_stroke = getattr(c, '_strokeColor', None)
-    c.setStrokeColor(RULE_COLOR)
-    c.setLineWidth(0.9)
+    prev_color = getattr(c, '_strokeColor', None)
+    c.setLineWidth(0.3)
+    c.setStrokeColor(GRID_COLOR)
     _line(c, SL_X, y, TABLE_RIGHT, y)
 
-    row_height = ROW_HEIGHT
+    row_h = ROW_HEIGHT
     y_top = y
-    y_bottom = y - row_height
+    y_bottom = y - row_h
 
-    # Border: verticals at each column boundary
-    grid_prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-    grid_prev_stroke = getattr(c, '_strokeColor', None)
-    c.setLineWidth(0.6)
-    c.setStrokeColor(GRID_COLOR)
-    # column lines
-    _line(c, SL_X, y_top, SL_X, y_bottom)
-    _line(c, DESC_X, y_top, DESC_X, y_bottom)
-    _line(c, QTY_X, y_top, QTY_X, y_bottom)
-    _line(c, RATE_X, y_top, RATE_X, y_bottom)
-    _line(c, AMT_X, y_top, AMT_X, y_bottom)
-    _line(c, TABLE_RIGHT, y_top, TABLE_RIGHT, y_bottom)
-    # bottom horizontal
+    # Draw vertical lines for each column
+    for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
+        _line(c, x, y_top, x, y_bottom)
+    # Bottom border of the summary row
     _line(c, SL_X, y_bottom, TABLE_RIGHT, y_bottom)
 
-    # Restore stroke settings for text
-    if grid_prev_w is not None:
-        c.setLineWidth(grid_prev_w)
-    if grid_prev_stroke is not None:
-        c.setStrokeColor(grid_prev_stroke)
     if prev_w is not None:
         c.setLineWidth(prev_w)
-    if prev_stroke is not None:
-        c.setStrokeColor(prev_stroke)
+    if prev_color is not None:
+        c.setStrokeColor(prev_color)
 
-    # Text inside the row
+    # Calculate total
+    total = sum(float(it.get("amount", 0.0)) for it in data.get("items", []))
+    total = round(total, 2)
+
+    # Thank‑you message on left
+    thanks = _get(data, "settings.thank_you", "Thank you for choosing KMC!")
     c.setFont(font, TEXT_FONT_SIZE)
-    thank_you = "Thank you for choosing KMC!"
-    try:
-        thank_you = (
-            _get(data, "settings.thank_you", None)
-            or _get(data, "business.thank_you", None)
-            or thank_you
-        )
-    except Exception:
-        pass
-    c.drawString(DESC_X + 2, y_bottom + 2, str(thank_you))
+    c.drawString(DESC_X + 2, y_bottom + 2, thanks)
 
-    # Total on the right (bold)
+    # "Total:" and value on right
     c.setFont(bold_font, TEXT_FONT_SIZE + 1)
     c.drawRightString(RATE_X + RATE_W - 2, y_bottom + 2, "Total:")
     c.drawRightString(AMT_X + AMT_W - 2, y_bottom + 2, f"{total:.2f}")
 
-    return y_bottom
+    return y_bottom - ROW_HEIGHT
 
 
 def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
@@ -534,13 +505,16 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
 
     c.setFont(font, SMALL_FONT_SIZE)
     if permit:
-        c.drawString(x, y, f"Permit: {permit}")
+        c.drawString(x, y, f"Gujarat Gov. Permit No: {permit}")
         y += 11
     if pan:
-        c.drawString(x, y, f"PAN: {pan}")
+        c.drawString(x, y, f"PAN No: {pan}")
         y += 11
     if cheque_to:
-        c.drawString(x, y, f"Cheque to: {cheque_to}")
+        c.drawString(x, y, "Please issue the Cheque in the Name of:")
+        y += 11
+        c.drawString(x, y, f"{cheque_to}")
+        y += 11
 
     # Authorized Signatory box on right
     bx = PAGE_WIDTH - MARGIN_RIGHT - SIGN_BOX_W
