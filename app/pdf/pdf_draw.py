@@ -206,7 +206,7 @@ def _line(canvas: Canvas, x1: float, y1: float, x2: float, y2: float) -> None:
 def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], first_page: bool) -> float:
     top_y = PAGE_HEIGHT - MARGIN_TOP
     # Use a single baseline for header alignment
-    baseline_y = PAGE_HEIGHT - MARGIN_TOP - 8
+    baseline_y = PAGE_HEIGHT - MARGIN_TOP - 6
     c.setLineWidth(0.5)
     c.setFillColor(TEXT_COLOR)
 
@@ -237,7 +237,7 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
             c.drawImage(
                 str(logo_path),
                 MARGIN_LEFT,
-                baseline_y - LOGO_HEIGHT + 4,
+                baseline_y - LOGO_HEIGHT + 3,
                 width=LOGO_WIDTH,
                 height=LOGO_HEIGHT,
                 preserveAspectRatio=True,
@@ -253,17 +253,18 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
         x_text = MARGIN_LEFT + LOGO_WIDTH + 6
         if owner:
             c.setFont(bold_font, OWNER_FONT_SIZE)
-            c.drawString(x_text, baseline_y, str(owner))
+            owner_y = baseline_y - 1
+            c.drawString(x_text, owner_y, str(owner))
         if phone:
             c.setFont(font, PHONE_FONT_SIZE)
-            c.drawString(x_text, baseline_y - 10, f"Mobile No: {phone}")
+            c.drawString(x_text, owner_y - 9, f"Mobile No: {phone}")
     except Exception:
         pass
 
     # Title "INVOICE" on the right (bold) at the same baseline
     c.setFont(bold_font, TITLE_FONT_SIZE)
     title_x = PAGE_WIDTH - MARGIN_RIGHT
-    c.drawRightString(title_x, baseline_y, "INVOICE")
+    c.drawRightString(title_x, baseline_y - 1, "INVOICE")
 
     # A separating line below header
     y = top_y - HEADER_HEIGHT
