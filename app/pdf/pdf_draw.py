@@ -250,14 +250,20 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     try:
         owner = _get(data, "settings.owner", None) or _get(data, "business.owner", None) or ""
         phone = _get(data, "settings.phone", None) or _get(data, "business.phone", None) or ""
-        x_text = MARGIN_LEFT + LOGO_WIDTH + 6
+        # Center the owner/phone block in the space between the logo and the INVOICE title area
+        left_x = MARGIN_LEFT + LOGO_WIDTH + 6
+        invoice_w = c.stringWidth("INVOICE", bold_font, TITLE_FONT_SIZE)
+        right_limit = (PAGE_WIDTH - MARGIN_RIGHT) - 6 - invoice_w
+        # Fallback to left alignment if there isn't enough room to center
+        center_x = left_x if right_limit <= left_x + 10 else (left_x + right_limit) / 2
+        owner_y = baseline_y - 1
         if owner:
             c.setFont(bold_font, OWNER_FONT_SIZE)
-            owner_y = baseline_y - 1
-            c.drawString(x_text, owner_y, str(owner))
+            c.drawCentredString(center_x, owner_y, str(owner))
         if phone:
             c.setFont(font, PHONE_FONT_SIZE)
-            c.drawString(x_text, owner_y - 9, f"Mobile No: {phone}")
+            # Match template: no space after colon
+            c.drawCentredString(center_x, owner_y - 9, f"Mobile No:{phone}")
     except Exception:
         pass
 
