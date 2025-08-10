@@ -36,18 +36,13 @@ from app.widgets.line_items_widget import LineItemsWidget
 class MainWindow(QMainWindow):
     dark_mode: bool = False
 
-    def _recalc_subtotal_tax_total(self) -> None:
-        # Compute totals from the new LineItemsWidget
-        subtotal = 0.0
+    def _recalc_total(self) -> None:
+        """Compute total from line items only (no tax) and update the UI."""
         try:
-            for it in self.items.get_items():
-                subtotal += float(it.get('amount', 0.0))
+            subtotal = sum(float(it.get('amount', 0.0)) for it in self.items.get_items())
         except Exception:
-            pass
-        tax = round_money(subtotal * float(self.settings.tax_rate))
-        total = round_money(subtotal + tax)
-        self.subtotal_value.setText(fmt_money(subtotal))
-        self.tax_value.setText(fmt_money(tax))
+            subtotal = 0.0
+        total = round_money(subtotal)
         self.total_value.setText(fmt_money(total))
 
     def __init__(self) -> None:
@@ -187,7 +182,7 @@ class MainWindow(QMainWindow):
 
         # Use the new rows-based widget
         self.items = LineItemsWidget(self)
-        self.items.totalsChanged.connect(self._update_totals_from_subtotal)
+        self.items.totalsChanged.connect(self._update_total)
         items_layout.addWidget(self.items)
 
         # Table buttons (inside the card, aligned right) — only Add (rows have their own remove)
@@ -204,16 +199,6 @@ class MainWindow(QMainWindow):
         summary.addStretch(1)
         summary_box = QVBoxLayout()
 
-        row_sub = QHBoxLayout()
-        row_sub.addWidget(QLabel("Subtotal:"))
-        self.subtotal_value = QLabel("0.00")
-        row_sub.addWidget(self.subtotal_value, 0, Qt.AlignRight)
-
-        row_tax = QHBoxLayout()
-        row_tax.addWidget(QLabel("Tax:"))
-        self.tax_value = QLabel("0.00")
-        row_tax.addWidget(self.tax_value, 0, Qt.AlignRight)
-
         row_total = QHBoxLayout()
         total_label = QLabel("Total:")
         total_font = QFont()
@@ -225,8 +210,6 @@ class MainWindow(QMainWindow):
         row_total.addWidget(total_label)
         row_total.addWidget(self.total_value, 0, Qt.AlignRight)
 
-        summary_box.addLayout(row_sub)
-        summary_box.addLayout(row_tax)
         summary_box.addLayout(row_total)
         summary.addLayout(summary_box)
         root_layout.addLayout(summary)
@@ -268,7 +251,7 @@ class MainWindow(QMainWindow):
 
         # Seed totals from initial row
         try:
-            self._update_totals_from_subtotal(0.0)
+            self._update_total(0.0)
         except Exception:
             pass
 
@@ -286,7 +269,7 @@ class MainWindow(QMainWindow):
                 if w:
                     self.items.remove_row(w)
             self.items.add_row()
-            self._update_totals_from_subtotal(0.0)
+            self._update_total(0.0)
         except Exception:
             pass
         # Reset date to today
@@ -423,22 +406,19 @@ class MainWindow(QMainWindow):
                 app.setStyleSheet("")
             self.apply_styles()
 
-    def _update_totals_from_subtotal(self, subtotal: float) -> None:
-        tax_rate = float(self.settings.tax_rate or 0.0)
-        tax = round_money(subtotal * tax_rate)
-        total = round_money(subtotal + tax)
-        self.subtotal_value.setText(fmt_money(subtotal))
-        self.tax_value.setText(fmt_money(tax))
-        self.total_value.setText("<b>" + fmt_money(total) + "</b>")
+    def _update_total(self, subtotal: float) -> None:
+        """Update only the total value label from a provided subtotal (no tax)."""
+        total = round_money(subtotal)
+        self.total_value.setText(fmt_money(total))
 
     def collect_data(self) -> dict:
         """Collect form data for DB save and PDF build.
 
-        Returns dict with keys:
-          customer: {name, phone, address}
-          invoice: {number, date (datetime.date)}
-          items: [{description, qty, rate, amount}]
-          subtotal, tax, total
+                Returns dict with keys:
+                    customer: {name, phone, address}
+                    invoice: {number, date (datetime.date)}
+                    items: [{description, qty, rate, amount}]
+                    total
         """
         # Invoice basics
         qd = self.date_edit.date()
@@ -452,8 +432,7 @@ class MainWindow(QMainWindow):
             pass
 
         subtotal = round_money(sum(i['amount'] for i in items))
-        tax = round_money(subtotal * float(self.settings.tax_rate))
-        total = round_money(subtotal + tax)
+        total = round_money(subtotal)
 
         return {
             'customer': {
@@ -466,8 +445,6 @@ class MainWindow(QMainWindow):
                 'date': inv_date,
             },
             'items': items,
-            'subtotal': float(subtotal),
-            'tax': float(tax),
             'total': float(total),
         }
 
@@ -503,8 +480,8 @@ class MainWindow(QMainWindow):
                 self.inv_number.setText(peek_next_invoice_number(self.settings.invoice_prefix, s))
         except Exception:
             self.inv_number.setText(f"{self.settings.invoice_prefix}0001")
-        # Recalculate totals to reflect new tax rate
-        self._recalc_subtotal_tax_total()
+        # Recalculate total (no tax in UI)
+        self._recalc_total()
 
     # --- Validation helpers ---
     def _clear_validation_styles(self) -> None:
