@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QFormLayout,
     QLineEdit,
-    QDoubleSpinBox,
     QPushButton,
     QDialogButtonBox,
     QFileDialog,
@@ -40,16 +39,6 @@ class SettingsDialog(QDialog):
         self.ed_thank_you = QLineEdit(settings.thank_you)
         self.ed_prefix = QLineEdit(settings.invoice_prefix)
 
-        self.sp_tax = QDoubleSpinBox()
-        self.sp_tax.setDecimals(3)
-        self.sp_tax.setRange(0.0, 1.0)  # fraction (e.g., 0.18 for 18%)
-        self.sp_tax.setSingleStep(0.005)
-        try:
-            self.sp_tax.setValue(float(settings.tax_rate))
-        except Exception:
-            self.sp_tax.setValue(0.0)
-        self.sp_tax.setToolTip("Tax rate as a fraction (e.g., 0.18 for 18%)")
-
         self.ed_logo = QLineEdit(settings.logo_path or "")
         btn_browse = QPushButton("Browse…")
         btn_browse.clicked.connect(self._browse_logo)
@@ -65,7 +54,6 @@ class SettingsDialog(QDialog):
         form.addRow("Cheque To", self.ed_cheque_to)
         form.addRow("Thank You", self.ed_thank_you)
         form.addRow("Invoice Prefix", self.ed_prefix)
-        form.addRow("Tax Rate", self.sp_tax)
         form.addRow("Logo Path", logo_row)
 
         root.addLayout(form)
@@ -134,10 +122,6 @@ class SettingsDialog(QDialog):
             self.ed_cheque_to.setText(s.cheque_to)
             self.ed_thank_you.setText(s.thank_you)
             self.ed_prefix.setText(s.invoice_prefix)
-            try:
-                self.sp_tax.setValue(float(s.tax_rate))
-            except Exception:
-                pass
             self.ed_logo.setText(s.logo_path or "")
             QMessageBox.information(self, "Import Settings", "Settings loaded. Click Save to apply.")
         except Exception as e:
@@ -154,6 +138,5 @@ class SettingsDialog(QDialog):
             cheque_to=self.ed_cheque_to.text().strip(),
             thank_you=self.ed_thank_you.text().strip(),
             invoice_prefix=self.ed_prefix.text().strip() or self._orig.invoice_prefix,
-            tax_rate=float(self.sp_tax.value()),
             logo_path=(self.ed_logo.text().strip() or None),
         )

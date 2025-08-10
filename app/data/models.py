@@ -25,8 +25,6 @@ class Invoice(SQLModel, table=True):
 	)
 	date: date
 	customer_id: int = Field(foreign_key="customer.id", index=True)
-	subtotal: float = 0.0
-	tax: float = 0.0
 	total: float = 0.0
 	notes: Optional[str] = None
 

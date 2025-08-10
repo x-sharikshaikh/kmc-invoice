@@ -24,15 +24,15 @@ def sample_data() -> dict:
         it["amount"] = round(float(it["qty"]) * float(it["rate"]), 2)
     subtotal = round(sum(i["amount"] for i in items), 2)
     settings = load_settings()
-    tax = round(subtotal * float(settings.tax_rate), 2)
-    total = round(subtotal + tax, 2)
+    total = round(subtotal, 2)
 
     return {
-        "invoice": {"number": "KMC-TEST-0001", "date": _date.today(), "tax_rate": settings.tax_rate},
+    "invoice": {"number": "KMC-TEST-0001", "date": _date.today()},
         "customer": {"name": "Acme Corp.", "phone": "+91 98765 43210", "address": "221B Baker Street\nLondon, NW1 6XE"},
         "items": items,
         "subtotal": subtotal,
-        "tax": tax,
+    # legacy key kept for compatibility; unused
+    "tax": 0.0,
         "total": total,
         "settings": {
             "business_name": settings.business_name,
@@ -43,7 +43,8 @@ def sample_data() -> dict:
             "cheque_to": settings.cheque_to,
             "thank_you": settings.thank_you,
             "invoice_prefix": settings.invoice_prefix,
-            "tax_rate": settings.tax_rate,
+            # no tax in new flow
+            "tax_rate": 0.0,
             "logo_path": settings.logo_path,
         },
         "business": {"permit": settings.permit, "pan": settings.pan, "cheque_to": settings.cheque_to},

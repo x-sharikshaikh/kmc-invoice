@@ -407,7 +407,7 @@ class MainWindow(QMainWindow):
             self.apply_styles()
 
     def _update_total(self, subtotal: float) -> None:
-        """Update only the total value label from a provided subtotal (no tax)."""
+        """Update only the total value label from current items (no subtotal UI)."""
         total = round_money(subtotal)
         self.total_value.setText(fmt_money(total))
 
@@ -449,7 +449,7 @@ class MainWindow(QMainWindow):
         }
 
     def refresh_settings(self, settings: Settings) -> None:
-        """Apply new settings to UI: logo, title, tax rate effects, invoice prefix."""
+        """Apply new settings to UI: logo, title, and invoice prefix."""
         self.settings = settings
         # Update header title and logo
         self.title_label.setText(self.settings.business_name or "KMC Invoice")

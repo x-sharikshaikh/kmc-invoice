@@ -23,7 +23,7 @@ For each scenario: fill Bill To (name/phone/address), set date (dd-MM-yyyy), add
      - Date format dd-MM-yyyy
      - Qty right aligned (up to 3 decimals, no trailing zeros)
      - Rate/Amount with exactly 2 decimals
-     - Subtotal/Tax/Total math correct
+  - Total equals sum of amounts (no tax)
      - Thank-you line present
      - Footer shows Permit/PAN/Cheque to (if set)
      - Signature rectangle on bottom-right
@@ -51,7 +51,7 @@ C. Content & formatting checks
 - Columns: Sl., Description, Qty, Rate, Amount headers present
 - Numbers:
   - Qty formatted up to 3 decimals without trailing zeros
-  - Rate/Amount/Subtotal/Tax/Total displayed with 2 decimals
+  - Rate/Amount/Total displayed with 2 decimals
   - Totals computed with rounding to 2 decimals (banker’s rounding)
 - Footer: Permit, PAN, Cheque to present when configured
 - Colors: white background, black text, gray table grid, black header/totals/signature rules

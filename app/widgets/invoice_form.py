@@ -76,15 +76,9 @@ class InvoiceForm(QWidget):
 		totals_row.addStretch(1)
 		totals_box = QVBoxLayout()
 
-		row_sub = QHBoxLayout()
-		row_sub.addWidget(QLabel("Subtotal:"))
-		self.subtotal_lbl = QLabel("0.00")
-		row_sub.addWidget(self.subtotal_lbl, 0, Qt.AlignRight)
+	# Subtotal removed from UI; only Total is displayed
 
-		row_tax = QHBoxLayout()
-		row_tax.addWidget(QLabel("Tax:"))
-		self.tax_lbl = QLabel("0.00")
-		row_tax.addWidget(self.tax_lbl, 0, Qt.AlignRight)
+	# Tax removed; keep two-row totals (Subtotal, Total)
 
 		row_total = QHBoxLayout()
 		total_label = QLabel("Total:" )
@@ -94,8 +88,6 @@ class InvoiceForm(QWidget):
 		row_total.addWidget(total_label)
 		row_total.addWidget(self.total_lbl, 0, Qt.AlignRight)
 
-		totals_box.addLayout(row_sub)
-		totals_box.addLayout(row_tax)
 		totals_box.addLayout(row_total)
 		totals_row.addLayout(totals_box)
 		root.addLayout(totals_row)
@@ -118,10 +110,7 @@ class InvoiceForm(QWidget):
 		pass
 
 	def _on_subtotal_changed(self, subtotal: float) -> None:
-		tax = round_money(subtotal * float(self.settings.tax_rate))
-		total = round_money(subtotal + tax)
-		self.subtotal_lbl.setText(fmt_money(subtotal))
-		self.tax_lbl.setText(fmt_money(tax))
+		total = round_money(subtotal)
 		self.total_lbl.setText(fmt_money(total))
 		self.totalsChanged.emit(subtotal)
 
@@ -134,19 +123,16 @@ class InvoiceForm(QWidget):
 
 		Returns dict with keys:
 		  customer: {name, phone, address}
-		  invoice: {number, date (datetime.date), tax_rate}
+		  invoice: {number, date (datetime.date)}
 		  items: [{description, qty, rate, amount}]
-		  subtotal: float
-		  tax: float
 		  total: float
 		"""
 		number = self.inv_number.text().strip()
 		qd = self.date_edit.date()
 		inv_date = _date(qd.year(), qd.month(), qd.day())
 		items = self._collect_items()
-		subtotal = round_money(sum(i['amount'] for i in items))
-		tax = round_money(subtotal * float(self.settings.tax_rate))
-		total = round_money(subtotal + tax)
+	subtotal = round_money(sum(i['amount'] for i in items))
+	total = round_money(subtotal)
 
 		return {
 			'customer': {
@@ -157,11 +143,8 @@ class InvoiceForm(QWidget):
 			'invoice': {
 				'number': number,
 				'date': inv_date,
-				'tax_rate': float(self.settings.tax_rate),
 			},
 			'items': items,
-			'subtotal': subtotal,
-			'tax': tax,
 			'total': total,
 		}
 

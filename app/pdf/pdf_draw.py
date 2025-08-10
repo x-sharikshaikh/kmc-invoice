@@ -54,7 +54,7 @@ ROW_HEIGHT = 6 * mm
 HEADER_ROW_HEIGHT = 7 * mm
 TABLE_TOP_GAP = 8 * mm  # gap between info blocks and table header (increased for breathing room)
 
-TOTALS_BLOCK_HEIGHT_MIN = 30 * mm  # ensure room before placing totals on same page
+TOTALS_BLOCK_HEIGHT_MIN = 10 * mm  # smaller minimum needed for single summary row
 THANK_YOU_GAP = 6 * mm
 SIGN_BOX_W = 50 * mm
 SIGN_BOX_H = 24 * mm
@@ -240,22 +240,19 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     title_x = PAGE_WIDTH - MARGIN_RIGHT
     c.drawRightString(title_x, top_y - 6, "INVOICE")
 
-    # Owner name + phone centered across the entire header width (between logo and INVOICE)
+    # Owner (bold) and phone left-aligned to the right of the logo
     try:
         owner = _get(data, "settings.owner", None) or _get(data, "business.owner", None) or ""
         phone = _get(data, "settings.phone", None) or _get(data, "business.phone", None) or ""
-        if owner or phone:
-            invoice_width = pdfmetrics.stringWidth("INVOICE", bold_font, TITLE_FONT_SIZE)
-            available_width = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT - LOGO_WIDTH - invoice_width
-            center_x = MARGIN_LEFT + LOGO_WIDTH + (available_width / 2.0)
-            y_owner = top_y - 4
-            if owner:
-                c.setFont(bold_font, OWNER_FONT_SIZE)
-                c.drawCentredString(center_x, y_owner, str(owner))
-                y_owner -= 12
-            if phone:
-                c.setFont(font, PHONE_FONT_SIZE)
-                c.drawCentredString(center_x, y_owner, str(phone))
+        x_text = MARGIN_LEFT + LOGO_WIDTH + 6
+        y_owner = top_y - 4  # align top of name with top of logo area
+        if owner:
+            c.setFont(bold_font, OWNER_FONT_SIZE)
+            c.drawString(x_text, y_owner, str(owner))
+            y_owner -= 12
+        if phone:
+            c.setFont(font, PHONE_FONT_SIZE)
+            c.drawString(x_text, y_owner, f"Mobile No: {phone}")
     except Exception:
         pass
 
@@ -448,17 +445,17 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
     return y, drawn
 
 
-def _draw_totals(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: float) -> float:
-    """Draw totals as a distinct right-aligned boxed section (Subtotal, Tax, Total).
+def _draw_summary(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: float) -> float:
+    """Draw a single bordered summary row with a thick separator above.
 
-    Steps:
-    - Box spans Rate..Amount columns.
-    - 3 rows tall; placed below a thick separator and a thank-you line.
-    - Returns y positioned below the box with one extra row gap for footer space.
+    - Computes total from items (no tax).
+    - Draws thick horizontal line at current y from SL_X to TABLE_RIGHT.
+    - Draws one row bordered on all sides with thank-you text on the left and Total on the right.
+    Returns the new y = y - ROW_HEIGHT.
     """
-    # Compute subtotal/tax/total
+    # Compute total
     items = list(data.get("items", []) or [])
-    sub_val = 0.0
+    total_val = 0.0
     for it in items:
         try:
             qty = float(it.get("qty", 0) or 0)
@@ -466,72 +463,64 @@ def _draw_totals(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: 
             amount = float(it.get("amount", qty * rate))
         except Exception:
             amount = 0.0
-        sub_val += amount
-    sub = round(sub_val + 0.0, 2)
-    tax_rate = float((_get(data, "invoice.tax_rate", None) or _get(data, "settings.tax_rate", 0) or 0))
-    tax = round(sub * tax_rate, 2)
-    total = round(sub + tax, 2)
+        total_val += amount
+    total = round(total_val, 2)
 
-    # Right-side box geometry
-    box_left = RATE_X
-    box_right = TABLE_RIGHT
-    box_width = box_right - box_left
-    rows = 3
-    box_height = rows * ROW_HEIGHT
-
-    # Thank you line above the box
-    c.setFont(font, TEXT_FONT_SIZE)
-    thanks = (
-        _get(data, "settings.thank_you", None)
-        or _get(data, "business.thank_you", None)
-        or "Thank you for choosing KMC!"
-    )
-    c.drawString(MARGIN_LEFT, y, str(thanks))
-    y -= ROW_HEIGHT
-
-    # Thick separator across the entire table width
+    # Thick separator line at current y
     prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(0.9)
     _line(c, SL_X, y, TABLE_RIGHT, y)
 
-    # Box outline
-    y_start = y
-    c.rect(box_left, y_start - box_height, box_width, box_height, stroke=1, fill=0)
+    row_height = ROW_HEIGHT
+    y_top = y
+    y_bottom = y - row_height
 
-    # Inner horizontal separators for the 3 rows
+    # Border: verticals at each column boundary
+    grid_prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
+    grid_prev_stroke = getattr(c, '_strokeColor', None)
     c.setLineWidth(0.6)
-    _line(c, box_left, y_start - ROW_HEIGHT, box_right, y_start - ROW_HEIGHT)
-    _line(c, box_left, y_start - 2 * ROW_HEIGHT, box_right, y_start - 2 * ROW_HEIGHT)
+    c.setStrokeColor(GRID_COLOR)
+    # column lines
+    _line(c, SL_X, y_top, SL_X, y_bottom)
+    _line(c, DESC_X, y_top, DESC_X, y_bottom)
+    _line(c, QTY_X, y_top, QTY_X, y_bottom)
+    _line(c, RATE_X, y_top, RATE_X, y_bottom)
+    _line(c, AMT_X, y_top, AMT_X, y_bottom)
+    _line(c, TABLE_RIGHT, y_top, TABLE_RIGHT, y_bottom)
+    # bottom horizontal
+    _line(c, SL_X, y_bottom, TABLE_RIGHT, y_bottom)
 
-    # Restore previous stroke settings
+    # Restore stroke settings for text
+    if grid_prev_w is not None:
+        c.setLineWidth(grid_prev_w)
+    if grid_prev_stroke is not None:
+        c.setStrokeColor(grid_prev_stroke)
     if prev_w is not None:
         c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
 
-    # Labels and values inside the box
+    # Text inside the row
     c.setFont(font, TEXT_FONT_SIZE)
-    y1 = y_start - ROW_HEIGHT + 2
-    y2 = y_start - 2 * ROW_HEIGHT + 2
-    y3 = y_start - 3 * ROW_HEIGHT + 2
+    thank_you = "Thank you for choosing KMC!"
+    try:
+        thank_you = (
+            _get(data, "settings.thank_you", None)
+            or _get(data, "business.thank_you", None)
+            or thank_you
+        )
+    except Exception:
+        pass
+    c.drawString(DESC_X + 2, y_bottom + 2, str(thank_you))
 
-    # Subtotal
-    c.drawRightString(RATE_X + RATE_W - 2, y1, "Subtotal:")
-    c.drawRightString(AMT_X + AMT_W - 2, y1, f"{sub:.2f}")
-
-    # Tax
-    c.drawRightString(RATE_X + RATE_W - 2, y2, "Tax:")
-    c.drawRightString(AMT_X + AMT_W - 2, y2, f"{tax:.2f}")
-
-    # Total in bold
+    # Total on the right (bold)
     c.setFont(bold_font, TEXT_FONT_SIZE + 1)
-    c.drawRightString(RATE_X + RATE_W - 2, y3, "Total:")
-    c.drawRightString(AMT_X + AMT_W - 2, y3, f"{total:.2f}")
+    c.drawRightString(RATE_X + RATE_W - 2, y_bottom + 2, "Total:")
+    c.drawRightString(AMT_X + AMT_W - 2, y_bottom + 2, f"{total:.2f}")
 
-    # Space below box for footer content
-    return y_start - box_height - ROW_HEIGHT
+    return y_bottom
 
 
 def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
@@ -565,6 +554,14 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
         c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
+    # Owner name inside the signature box (centered)
+    try:
+        owner = _get(data, "settings.owner", "") or _get(data, "business.owner", "")
+        if owner:
+            c.setFont(font, SMALL_FONT_SIZE)
+            c.drawCentredString(bx + SIGN_BOX_W / 2, by + SIGN_BOX_H / 2 + 5, str(owner))
+    except Exception:
+        pass
     c.setFont(font, SMALL_FONT_SIZE)
     c.drawCentredString(bx + SIGN_BOX_W / 2, by + 4, "Authorized Signatory")
 
@@ -573,12 +570,12 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
 def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
     """Draw a complete invoice PDF using ReportLab (A4) with pagination.
 
-    Data shape (keys optional where noted):
+        Data shape (keys optional where noted):
     {
       "customer": {"name": str, "phone": str, "address": str},
-      "invoice": {"number": str, "date": date|str, "tax_rate": float},
-      "items": [{"description": str, "qty": float, "rate": float, "amount": float}, ...],
-      "subtotal": float, "tax": float, "total": float,
+            "invoice": {"number": str, "date": date|str},
+            "items": [{"description": str, "qty": float, "rate": float, "amount": float}, ...],
+            "total": float,
       "settings"?: {"logo_path"?: str},
       "business"?: {"permit"?: str, "pan"?: str, "cheque_to"?: str}
     }
@@ -631,7 +628,7 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
                 c.showPage()
                 y = new_page(first_page=False)
             # Draw totals and footer
-            y = _draw_totals(c, font, bold_font, data, y)
+            y = _draw_summary(c, font, bold_font, data, y)
             _draw_footer(c, font, data)
 
     c.save()

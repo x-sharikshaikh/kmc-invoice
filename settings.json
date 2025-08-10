@@ -7,7 +7,6 @@
   "cheque_to": "Shaikh Mo.Ajaz",
   "thank_you": "Thank you for choosing KMC!",
   "invoice_prefix": "KMC-",
-  "tax_rate": 0.0,
   "logo_path": "assets/logo.png",
   "use_template_overlay": false
 }

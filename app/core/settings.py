@@ -22,7 +22,6 @@ class Settings:
 	cheque_to: str = "Shaikh Mo.Ajaz"
 	thank_you: str = "Thank you for choosing KMC!"
 	invoice_prefix: str = "KMC-"
-	tax_rate: float = 0.00
 	# Optional absolute/relative path to a logo image
 	logo_path: Optional[str] = None
 	# Optional legacy mode to use template overlay

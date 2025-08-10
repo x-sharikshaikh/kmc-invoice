@@ -26,15 +26,15 @@ def main() -> None:
 
     items = _items()
     subtotal = round(sum(r["amount"] for r in items), 2)
-    tax = round(subtotal * float(settings.tax_rate), 2)
-    total = round(subtotal + tax, 2)
+    total = round(subtotal, 2)
 
     data = {
         "customer": {"name": "Sample Customer", "phone": "(555) 012-3456", "address": "123 Sample St\nMetropolis"},
-        "invoice": {"number": "SAMPLE", "date": _date.today(), "tax_rate": settings.tax_rate},
+    "invoice": {"number": "SAMPLE", "date": _date.today()},
         "items": items,
         "subtotal": subtotal,
-        "tax": tax,
+    # legacy key kept for compatibility; unused
+    "tax": 0.0,
         "total": total,
         "settings": {
             "business_name": settings.business_name,
@@ -45,7 +45,8 @@ def main() -> None:
             "cheque_to": settings.cheque_to,
             "thank_you": settings.thank_you,
             "invoice_prefix": settings.invoice_prefix,
-            "tax_rate": settings.tax_rate,
+            # no tax in new flow
+            "tax_rate": 0.0,
             "logo_path": settings.logo_path,
         },
         "business": {"permit": settings.permit, "pan": settings.pan, "cheque_to": settings.cheque_to},

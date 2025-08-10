@@ -37,12 +37,19 @@ def _collect_items(win) -> List[Dict[str, Any]]:
             return list(win.items.get_items())  # type: ignore[no-any-return]
     except Exception:
         pass
+    # Fallback to empty list if widget is missing or errored
     return []
 
 
 def _save_draft_to_db(win) -> Dict[str, Any]:
-    """Persist the current form to DB and return a dict with saved invoice data."""
-    settings = win.settings
+    """Persist the current invoice to the DB and return a dict with persisted objects and totals.
+
+    Returns keys:
+    - invoice: persisted Invoice instance
+    - customer: persisted Customer instance
+    - items: list of item dicts used for persistence
+    - total: numeric grand total (sum of item amounts)
+    """
     # Customer
     name = win.name_edit.text().strip()
     phone = win.phone_edit.text().strip()
@@ -54,15 +61,12 @@ def _save_draft_to_db(win) -> Dict[str, Any]:
     from datetime import date as _date
     inv_date = _date(qd.year(), qd.month(), qd.day())
     items = _collect_items(win)
-    subtotal = sum(i["amount"] for i in items)
-    tax = subtotal * float(settings.tax_rate)
-    total = subtotal + tax
+    total = sum(i.get("amount", 0) for i in items)
     dto = {
         "number": win.inv_number.text().strip(),
         "date": inv_date,
         "customer_id": cust.id,
         "notes": None,
-        "tax": tax,
         "items": items,
     }
     inv = create_invoice(dto)
@@ -70,8 +74,6 @@ def _save_draft_to_db(win) -> Dict[str, Any]:
         "invoice": inv,
         "customer": cust,
         "items": items,
-        "subtotal": subtotal,
-        "tax": tax,
         "total": total,
     }
 
@@ -273,7 +275,7 @@ def main() -> None:
         except Exception:
             pass
 
-    # Build final PDF (code-drawn) directly
+        # Build final PDF (code-drawn) directly
         inv_no = saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number']
         out_final = out_dir / f"{inv_no}.pdf"
 
@@ -283,11 +285,8 @@ def main() -> None:
             'invoice': {
                 'number': inv_no,
                 'date': (getattr(saved['invoice'], 'date', None) or win.date_edit.date().toString("dd-MM-yyyy")),
-                'tax_rate': settings.tax_rate,
             },
             'items': collected['items'],
-            'subtotal': saved.get('subtotal'),
-            'tax': saved.get('tax'),
             'total': saved.get('total'),
             'settings': {
                 'business_name': settings.business_name,
@@ -298,7 +297,6 @@ def main() -> None:
                 'cheque_to': settings.cheque_to,
                 'thank_you': settings.thank_you,
                 'invoice_prefix': settings.invoice_prefix,
-                'tax_rate': settings.tax_rate,
                 'logo_path': settings.logo_path,
             },
             'business': {
@@ -306,7 +304,7 @@ def main() -> None:
                 'pan': settings.pan,
                 'cheque_to': settings.cheque_to,
             },
-        }
+    }
 
         # Build final PDF (always code-drawn). If legacy flag is set, warn and continue.
         try:
