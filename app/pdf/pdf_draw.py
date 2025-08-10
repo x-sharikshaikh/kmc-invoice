@@ -514,8 +514,7 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
     if cheque_to:
         c.drawString(x, y, "Please issue the Cheque in the Name of:")
         y += 11
-        c.drawString(x, y, f"{cheque_to}")
-        y += 11
+    c.drawString(x, y, cheque_to)
 
     # Authorized Signatory box on right
     bx = PAGE_WIDTH - MARGIN_RIGHT - SIGN_BOX_W
