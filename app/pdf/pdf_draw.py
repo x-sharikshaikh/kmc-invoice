@@ -52,7 +52,7 @@ AMT_X = RATE_X + RATE_W
 TABLE_RIGHT = AMT_X + AMT_W
 ROW_HEIGHT = 6 * mm
 HEADER_ROW_HEIGHT = 7 * mm
-TABLE_TOP_GAP = 6 * mm  # gap between info blocks and table header
+TABLE_TOP_GAP = 8 * mm  # gap between info blocks and table header (increased for breathing room)
 
 TOTALS_BLOCK_HEIGHT_MIN = 30 * mm  # ensure room before placing totals on same page
 THANK_YOU_GAP = 6 * mm
@@ -240,12 +240,14 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     title_x = PAGE_WIDTH - MARGIN_RIGHT
     c.drawRightString(title_x, top_y - 6, "INVOICE")
 
-    # Owner name + phone centered at top-left
+    # Owner name + phone centered across the entire header width (between logo and INVOICE)
     try:
         owner = _get(data, "settings.owner", None) or _get(data, "business.owner", None) or ""
         phone = _get(data, "settings.phone", None) or _get(data, "business.phone", None) or ""
         if owner or phone:
-            center_x = MARGIN_LEFT + (LOGO_WIDTH / 2)
+            invoice_width = pdfmetrics.stringWidth("INVOICE", bold_font, TITLE_FONT_SIZE)
+            available_width = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT - LOGO_WIDTH - invoice_width
+            center_x = MARGIN_LEFT + LOGO_WIDTH + (available_width / 2.0)
             y_owner = top_y - 4
             if owner:
                 c.setFont(bold_font, OWNER_FONT_SIZE)
@@ -328,23 +330,52 @@ def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> fl
     prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
-    c.setLineWidth(0.9)
+    c.setLineWidth(1.0)
     _line(c, SL_X, y, TABLE_RIGHT, y)
+    # Compute the body start y (bottom of header block)
+    y_body_start = y_top - HEADER_ROW_HEIGHT
+
+    # Draw vertical lines for the header area so they connect with body column lines
+    grid_prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
+    grid_prev_stroke = getattr(c, '_strokeColor', None)
+    c.setLineWidth(0.3)
+    c.setStrokeColor(GRID_COLOR)
+    # left border and column splits
+    _line(c, SL_X, y_top, SL_X, y_body_start)
+    _line(c, DESC_X, y_top, DESC_X, y_body_start)
+    _line(c, QTY_X, y_top, QTY_X, y_body_start)
+    _line(c, RATE_X, y_top, RATE_X, y_body_start)
+    _line(c, AMT_X, y_top, AMT_X, y_body_start)
+    # right border
+    _line(c, TABLE_RIGHT, y_top, TABLE_RIGHT, y_body_start)
+
+    # Restore stroke settings
+    if grid_prev_w is not None:
+        c.setLineWidth(grid_prev_w)
+    if grid_prev_stroke is not None:
+        c.setStrokeColor(grid_prev_stroke)
     if prev_w is not None:
         c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
-    return y - (HEADER_ROW_HEIGHT - 3)
+    return y_body_start
 
 
 def _ensure_table_within_page(c: Canvas, y_cursor: float, need_height: float) -> bool:
     return (y_cursor - need_height) > (MARGIN_BOTTOM + TOTALS_BLOCK_HEIGHT_MIN)
 
 
-def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y: float) -> Tuple[float, int]:
+def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y: float, total_items: int | None = None) -> Tuple[float, int]:
     y = start_y
     c.setFont(font, TEXT_FONT_SIZE)
     drawn = 0
+    # If total_items provided, infer base index from slice length so we can compute global indices
+    base_index = 0
+    if total_items is not None:
+        try:
+            base_index = max(0, int(total_items) - len(items))
+        except Exception:
+            base_index = 0
 
     # vertical column lines (draw progressively with rows)
     # we’ll draw outer border lines as we go to keep crisp alignment
@@ -384,8 +415,16 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
         c.drawRightString(RATE_X + RATE_W - 2, baseline_y, fmt_money(rate))
         c.drawRightString(AMT_X + AMT_W - 2, baseline_y, fmt_money(amount))
 
-        # horizontal line under the row block (light)
-        _line(c, SL_X, y - row_h, TABLE_RIGHT, y - row_h)
+        # horizontal line under the row block (light); skip for the overall last row
+        is_last_overall = False
+        if total_items is not None:
+            try:
+                global_idx = base_index + (idx - 1)
+                is_last_overall = (global_idx == total_items - 1)
+            except Exception:
+                is_last_overall = False
+        if not is_last_overall:
+            _line(c, SL_X, y - row_h, TABLE_RIGHT, y - row_h)
 
         # inner verticals for this row block (draw once; visually continuous across rows)
         # left border
@@ -410,7 +449,14 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
 
 
 def _draw_totals(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: float) -> float:
-    # Compute subtotal from items to verify consistency
+    """Draw totals as a distinct right-aligned boxed section (Subtotal, Tax, Total).
+
+    Steps:
+    - Box spans Rate..Amount columns.
+    - 3 rows tall; placed below a thick separator and a thank-you line.
+    - Returns y positioned below the box with one extra row gap for footer space.
+    """
+    # Compute subtotal/tax/total
     items = list(data.get("items", []) or [])
     sub_val = 0.0
     for it in items:
@@ -421,53 +467,71 @@ def _draw_totals(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: 
         except Exception:
             amount = 0.0
         sub_val += amount
-    # Round to 2 decimals
     sub = round(sub_val + 0.0, 2)
-    # Prefer invoice.tax_rate then settings.tax_rate
     tax_rate = float((_get(data, "invoice.tax_rate", None) or _get(data, "settings.tax_rate", 0) or 0))
     tax = round(sub * tax_rate, 2)
     total = round(sub + tax, 2)
 
-    # Thank you line immediately above totals
+    # Right-side box geometry
+    box_left = RATE_X
+    box_right = TABLE_RIGHT
+    box_width = box_right - box_left
+    rows = 3
+    box_height = rows * ROW_HEIGHT
+
+    # Thank you line above the box
     c.setFont(font, TEXT_FONT_SIZE)
     thanks = (
         _get(data, "settings.thank_you", None)
         or _get(data, "business.thank_you", None)
         or "Thank you for choosing KMC!"
     )
-    # Ensure the thanks line sits above signature area if space is tight
-    min_y = MARGIN_BOTTOM + SIGN_BOX_H + (8 * mm)
-    y = max(y, min_y)
     c.drawString(MARGIN_LEFT, y, str(thanks))
     y -= ROW_HEIGHT
 
-    # separator line above totals (slightly thicker)
+    # Thick separator across the entire table width
     prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
-    c.setLineWidth(0.6)
+    c.setLineWidth(0.9)
     _line(c, SL_X, y, TABLE_RIGHT, y)
+
+    # Box outline
+    y_start = y
+    c.rect(box_left, y_start - box_height, box_width, box_height, stroke=1, fill=0)
+
+    # Inner horizontal separators for the 3 rows
+    c.setLineWidth(0.6)
+    _line(c, box_left, y_start - ROW_HEIGHT, box_right, y_start - ROW_HEIGHT)
+    _line(c, box_left, y_start - 2 * ROW_HEIGHT, box_right, y_start - 2 * ROW_HEIGHT)
+
+    # Restore previous stroke settings
     if prev_w is not None:
         c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
-    y -= 6
 
+    # Labels and values inside the box
     c.setFont(font, TEXT_FONT_SIZE)
-    c.drawRightString(RATE_X + RATE_W - 2, y, "Subtotal:")
-    c.drawRightString(AMT_X + AMT_W - 2, y, f"{sub:.2f}")
-    y -= ROW_HEIGHT
+    y1 = y_start - ROW_HEIGHT + 2
+    y2 = y_start - 2 * ROW_HEIGHT + 2
+    y3 = y_start - 3 * ROW_HEIGHT + 2
 
-    tax_label = f"Tax ({tax_rate*100:.0f}%)" if tax_rate else "Tax"
-    c.drawRightString(RATE_X + RATE_W - 2, y, f"{tax_label}:")
-    c.drawRightString(AMT_X + AMT_W - 2, y, f"{tax:.2f}")
-    y -= ROW_HEIGHT
+    # Subtotal
+    c.drawRightString(RATE_X + RATE_W - 2, y1, "Subtotal:")
+    c.drawRightString(AMT_X + AMT_W - 2, y1, f"{sub:.2f}")
 
+    # Tax
+    c.drawRightString(RATE_X + RATE_W - 2, y2, "Tax:")
+    c.drawRightString(AMT_X + AMT_W - 2, y2, f"{tax:.2f}")
+
+    # Total in bold
     c.setFont(bold_font, TEXT_FONT_SIZE + 1)
-    c.drawRightString(RATE_X + RATE_W - 2, y, "Total:")
-    c.drawRightString(AMT_X + AMT_W - 2, y, f"{total:.2f}")
-    y -= ROW_HEIGHT
-    return y
+    c.drawRightString(RATE_X + RATE_W - 2, y3, "Total:")
+    c.drawRightString(AMT_X + AMT_W - 2, y3, f"{total:.2f}")
+
+    # Space below box for footer content
+    return y_start - box_height - ROW_HEIGHT
 
 
 def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
@@ -548,7 +612,7 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
     start_index = 0
     while start_index < len(items):
         y_before = y
-        y, drawn = _draw_table_rows(c, font, items[start_index:], y)
+        y, drawn = _draw_table_rows(c, font, items[start_index:], y, total_items=len(items))
         if drawn == 0:
             # Not enough space for even one row; start a new page
             c.showPage()
