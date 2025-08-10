@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QFormLayout,
     QFrame,
-    QHeaderView,
     QLineEdit,
     QTextEdit,
     QDateEdit,
@@ -101,6 +100,10 @@ class MainWindow(QMainWindow):
 
         # Top groups: Bill To (left) and Invoice Info (right) as "cards"
         top = QHBoxLayout()
+        # Ensure no extra spacer and set consistent margins/spacings
+        top.setContentsMargins(12, 12, 12, 6)
+        top.setSpacing(12)
+
         # Bill To card
         bill_card = QFrame()
         bill_card.setObjectName("Card")
@@ -330,20 +333,22 @@ class MainWindow(QMainWindow):
         QMainWindow>QWidget { background: #fafafa; }
     QFrame#Card { border: 1px solid #e0e0e0; border-radius: 10px; background: #ffffff; }
     /* Row mini-card inside Items */
-    QFrame#CardRow { border: 1px solid #e5e5e5; border-radius: 8px; background: #ffffff; padding: 8px; }
-    QFrame#CardRow:focus-within { border-color: #5b8def; }
+    QFrame#CardRow { border:1px solid #e0e0e0; border-radius:10px; background:#fff; padding:6px; }
+    QFrame#CardRow:focus-within { border-color:#5b8def; }
     QLabel#SectionTitle { font-size: 14px; font-weight: 700; color: #333; padding: 2px 2px 0 2px; }
         QLabel { font-size: 13px; }
-        QHeaderView::section {
-            font-size: 14px; padding: 8px; font-weight: 600; background: #f2f2f2; border: 0px; border-bottom: 1px solid #ddd;
-        }
+    /* (removed table header styles) */
         /* Inputs: make them consistent with card styling */
         QLineEdit, QTextEdit, QDateEdit, QDoubleSpinBox {
             border: 1px solid #cfcfcf; border-radius: 8px; padding: 8px; background: #ffffff;
         }
+        /* Requested overrides */
+        QLineEdit, QDateEdit, QDoubleSpinBox { border:1px solid #cfcfcf; border-radius:10px; padding:8px; background:#fff; }
     QDateEdit::drop-down { width: 20px; }
     QDateEdit::down-button, QDateEdit::up-button { width: 16px; }
-        QLineEdit:focus, QTextEdit:focus, QDateEdit:focus, QDoubleSpinBox:focus { border: 1px solid #5b8def; }
+    QLineEdit:focus, QTextEdit:focus, QDateEdit:focus, QDoubleSpinBox:focus { border: 1px solid #5b8def; }
+    /* Requested overrides */
+    QLineEdit:focus, QDateEdit:focus, QDoubleSpinBox:focus { border-color:#5b8def; }
         QPushButton {
             padding: 9px 16px; border-radius: 10px; border: 1px solid #d0d0d0; background: #ffffff;
         }
@@ -363,33 +368,22 @@ class MainWindow(QMainWindow):
         QMainWindow>QWidget { background: #2b2b2b; }
     QFrame#Card { border: 1px solid #3d3d3d; border-radius: 10px; background: #2f2f2f; }
     /* Row mini-card inside Items */
-    QFrame#CardRow { border: 1px solid #555; border-radius: 8px; background: #3a3a3a; padding: 8px; }
+    QFrame#CardRow { border:1px solid #555; border-radius:10px; background:#3a3a3a; }
     QFrame#CardRow:focus-within { border-color: #7aa2ff; }
     QLabel#SectionTitle { font-size: 14px; font-weight: 700; color: #f0f0f0; padding: 2px 2px 0 2px; }
         QLabel { font-size: 13px; color: #f0f0f0; }
-        QHeaderView::section {
-            font-size: 14px; padding: 8px; font-weight: 600; background: #3a3a3a; border: 0px; border-bottom: 1px solid #444;
-            color: #f0f0f0;
-        }
-        /* Table inside card: remove outer border so the card provides it */
-        QTableWidget { border: 0; border-radius: 8px; background: #2f2f2f; gridline-color: #444; }
-        QTableView { outline: 0; }
-        QTableView::item:focus { outline: none; }
-        QTableWidget::item { padding: 6px 8px; }
-        /* Dark in-cell editors styling to match card inputs */
-        QLineEdit#CellEditor {
-            padding: 8px 12px; min-height: 30px; border: 1px solid #666; border-radius: 10px;
-            background: #3a3a3a; color: #f0f0f0;
-        }
-        QLineEdit#CellEditor:focus { border: 1px solid #7aa2ff; }
-        QTableView::item:selected { background: transparent; }
+    /* Removed table header styles */
         QLineEdit, QTextEdit, QDateEdit, QDoubleSpinBox {
             border: 1px solid #555; border-radius: 8px; padding: 8px; background: #3a3a3a; color: #f0f0f0;
             selection-background-color: #5b8def; selection-color: #ffffff;
         }
+        /* Requested overrides */
+        QLineEdit, QDateEdit, QDoubleSpinBox { border:1px solid #666; border-radius:10px; padding:8px; background:#2e2e2e; color:#f0f0f0; }
     QDateEdit::drop-down { width: 20px; }
     QDateEdit::down-button, QDateEdit::up-button { width: 16px; }
     QLineEdit:focus, QTextEdit:focus, QDateEdit:focus, QDoubleSpinBox:focus { border: 1px solid #7aa2ff; }
+    /* Requested overrides */
+    QLineEdit:focus, QDateEdit:focus, QDoubleSpinBox:focus { border-color:#8cb0ff; }
         QPushButton {
             padding: 9px 16px; border-radius: 10px; border: 1px solid #555; background: #3a3a3a; color: #f0f0f0;
         }
@@ -430,11 +424,12 @@ class MainWindow(QMainWindow):
             self.apply_styles()
 
     def _update_totals_from_subtotal(self, subtotal: float) -> None:
-        tax = round_money(subtotal * float(self.settings.tax_rate))
+        tax_rate = float(self.settings.tax_rate or 0.0)
+        tax = round_money(subtotal * tax_rate)
         total = round_money(subtotal + tax)
         self.subtotal_value.setText(fmt_money(subtotal))
         self.tax_value.setText(fmt_money(tax))
-        self.total_value.setText(fmt_money(total))
+        self.total_value.setText("<b>" + fmt_money(total) + "</b>")
 
     def collect_data(self) -> dict:
         """Collect form data for DB save and PDF build.
@@ -532,12 +527,16 @@ class MainWindow(QMainWindow):
 
     def _mark_field_invalid(self, widget) -> None:
         try:
-            widget.setStyleSheet("border: 1px solid #e07070;")
+            # Light red background and subtle border
+            widget.setStyleSheet("background-color: #ffecec; border: 1px solid #e07070;")
         except Exception:
             pass
 
-    def validate_form(self) -> list[str]:
-        """Validate required fields and highlight invalid cells. Returns issue strings."""
+    def validate_form(self) -> bool:
+        """Validate required fields and highlight invalid cells.
+
+        Returns True when valid; otherwise shows a single dialog with all issues and returns False.
+        """
         self._clear_validation_styles()
         issues: list[str] = []
 
@@ -594,7 +593,14 @@ class MainWindow(QMainWindow):
         if not valid_row_found:
             issues.append("At least one valid line item is required (description, qty > 0, rate > 0).")
 
-        return issues
+        if issues:
+            from PySide6.QtWidgets import QMessageBox
+            try:
+                QMessageBox.warning(self, "Fix form errors", "\n".join(f"• {m}" for m in issues))
+            except Exception:
+                pass
+            return False
+        return True
 
 
 def create_main_window() -> QMainWindow:

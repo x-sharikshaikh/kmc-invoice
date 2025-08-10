@@ -29,74 +29,73 @@ class LineItemRow(QWidget):
     subtotalChanged = Signal(float)
     removed = Signal(QWidget)
 
-    def __init__(
-        self,
-        row_number: int,
-        description: str = "",
-        qty: float = 1.0,
-        rate: float = 0.0,
-        parent: QWidget | None = None,
-    ) -> None:
+    def __init__(self, row_number: int, description: str = "", qty: float = 1.0, rate: float = 0.0, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.row_number = row_number
 
-        # Outer container uses a mini-card frame
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        # Base row layout
+        self.layout = QHBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(8)
 
-        frame = QFrame(self)
-        frame.setObjectName("CardRow")
-        frame_v = QVBoxLayout(frame)
-        frame_v.setContentsMargins(0, 0, 0, 0)
-        frame_v.setSpacing(0)
-
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-
+        # Sl. number
         self.lbl_sl = QLabel(str(row_number))
         self.lbl_sl.setFixedWidth(24)
         self.lbl_sl.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.lbl_sl)
+        self.layout.addWidget(self.lbl_sl)
 
+        # Description
         self.desc_edit = QLineEdit(description)
         self.desc_edit.setPlaceholderText("Description")
-        layout.addWidget(self.desc_edit, 1)
+        self.layout.addWidget(self.desc_edit, 1)
+        # Ensure description expands
+        self.layout.setStretchFactor(self.desc_edit, 1)
 
+        # Qty
         self.qty_spin = QDoubleSpinBox()
         self.qty_spin.setDecimals(3)
         self.qty_spin.setMinimum(0.001)
         self.qty_spin.setSingleStep(1.0)
         self.qty_spin.setValue(qty)
         self.qty_spin.setAlignment(Qt.AlignRight)
-        layout.addWidget(self.qty_spin)
+        self.qty_spin.setFixedWidth(80)
+        self.layout.addWidget(self.qty_spin)
 
+        # Rate
         self.rate_spin = QDoubleSpinBox()
         self.rate_spin.setDecimals(2)
         self.rate_spin.setMinimum(0.00)
         self.rate_spin.setSingleStep(1.0)
         self.rate_spin.setValue(rate)
         self.rate_spin.setAlignment(Qt.AlignRight)
-        layout.addWidget(self.rate_spin)
+        self.rate_spin.setFixedWidth(100)
+        self.layout.addWidget(self.rate_spin)
 
+        # Amount (right-aligned, fixed min width)
         self.amount_lbl = QLabel(fmt_money(qty * rate))
         self.amount_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.amount_lbl.setFixedWidth(100)
-        layout.addWidget(self.amount_lbl)
+        self.layout.addWidget(self.amount_lbl)
 
-        # Remove button
+        # Remove button at end
         self.remove_btn = QPushButton("X")
         self.remove_btn.setFixedWidth(28)
         self.remove_btn.clicked.connect(lambda: self.removed.emit(self))
-        layout.addWidget(self.remove_btn)
+        self.layout.addWidget(self.remove_btn)
 
-        # Recalc when qty or rate changes
+        # Recalculate on change
         self.qty_spin.valueChanged.connect(self._recalc)
         self.rate_spin.valueChanged.connect(self._recalc)
 
-        # Compose frame
-        frame_v.addLayout(layout)
+        # Wrap layout inside CardRow frame
+        frame = QFrame(self)
+        frame.setObjectName("CardRow")
+        v = QVBoxLayout(frame)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.addLayout(self.layout)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(frame)
 
     def _recalc(self) -> None:

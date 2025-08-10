@@ -31,40 +31,13 @@ SAVE_DIR = Path.home() / "Documents" / "KMC Invoices"
 
 
 def _collect_items(win) -> List[Dict[str, Any]]:
-    """Collect line items from the new LineItemsWidget when present, or fall back to any legacy table if available."""
-    # Preferred: new rows-based widget
+    """Collect line items from the LineItemsWidget only (legacy table removed)."""
     try:
         if hasattr(win, "items") and hasattr(win.items, "get_items"):
             return list(win.items.get_items())  # type: ignore[no-any-return]
     except Exception:
         pass
-    # Fallback: legacy QTableWidget path (best-effort, avoid hard dependency on Qt item classes)
-    items: List[Dict[str, Any]] = []
-    t = getattr(win, "table", None)
-    try:
-        if t is None:
-            return items
-        rows = t.rowCount()
-        for r in range(rows):
-            desc_it = t.item(r, 1)
-            qty_it = t.item(r, 2)
-            rate_it = t.item(r, 3)
-            amt_it = t.item(r, 4)
-            def _to_f(it) -> float:
-                try:
-                    return float(it.text()) if it and it.text() else 0.0
-                except Exception:
-                    return 0.0
-            items.append({
-                "description": (desc_it.text() if desc_it else "").strip(),
-                "qty": _to_f(qty_it),
-                "rate": _to_f(rate_it),
-                "amount": _to_f(amt_it),
-            })
-    except Exception:
-        # If anything goes wrong, return what we have
-        pass
-    return items
+    return []
 
 
 def _save_draft_to_db(win) -> Dict[str, Any]:
@@ -203,9 +176,8 @@ def main() -> None:
     def on_save_draft():
         # Ensure settings reflect latest on-disk config
         _reload_settings_from_disk()
-        issues = win.validate_form() if hasattr(win, 'validate_form') else []
-        if issues:
-            QMessageBox.warning(win, "Fix form errors", "\n".join(f"• {m}" for m in issues))
+        is_valid = win.validate_form() if hasattr(win, 'validate_form') else True
+        if not is_valid:
             return
         saved = _save_draft_to_db(win)
         # Bump sequence and refresh UI number for next invoice entry
@@ -240,24 +212,19 @@ def main() -> None:
                 win.refresh_settings(new_settings)
 
     def on_save_pdf_and_optionally_print(do_print: bool = False):
-        # Ensure settings reflect latest on-disk config
-        _reload_settings_from_disk()
-        # Ensure output directory exists before persisting anything to DB
+        # Ensure the save directory exists right away; fail fast with a clear message
         try:
             out_dir = _ensure_save_dir()
             if not out_dir.exists() or not out_dir.is_dir():
-                raise OSError(f"Output directory is not available: {out_dir}")
-        except Exception as e:
-            QMessageBox.critical(
-                win,
-                "Cannot save PDF",
-                f"Could not create or access the save folder:\n{SAVE_DIR}\n\nDetails: {e}",
-            )
+                raise OSError(str(out_dir))
+        except Exception:
+            QMessageBox.critical(win, "Cannot save", "Could not create save folder in Documents/KMC Invoices")
             return
+        # Ensure settings reflect latest on-disk config
+        _reload_settings_from_disk()
         logger.info("Save/Print invoked (do_print=%s)", do_print)
-        issues = win.validate_form() if hasattr(win, 'validate_form') else []
-        if issues:
-            QMessageBox.warning(win, "Fix form errors", "\n".join(f"• {m}" for m in issues))
+        is_valid = win.validate_form() if hasattr(win, 'validate_form') else True
+        if not is_valid:
             return
         logger.info("Validation passed")
         # Collect UI data
@@ -306,7 +273,7 @@ def main() -> None:
         except Exception:
             pass
 
-        # Build final PDF (code-drawn) directly
+    # Build final PDF (code-drawn) directly
         inv_no = saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number']
         out_final = out_dir / f"{inv_no}.pdf"
 
@@ -366,7 +333,7 @@ def main() -> None:
                 # Only attempt automatic printing on Windows
                 import sys as _sys
                 if _sys.platform == "win32":
-                    ok = print_pdf(str(out_final), parent=win)
+                    ok = print_pdf(str(out_final))
                 else:
                     ok = False
             except Exception:
@@ -374,8 +341,8 @@ def main() -> None:
             if not ok:
                 QMessageBox.information(
                     win,
-                    "Manual print",
-                    "The PDF was saved, but automatic printing isn't available. Please open the PDF and print it manually.",
+                    "Print",
+                    "Couldn’t auto‑print. Please open the saved PDF and print from your viewer.",
                 )
         else:
             # Open the PDF in default viewer; optionally open folder on failure

@@ -32,6 +32,8 @@ TITLE_FONT_SIZE = 22
 LABEL_FONT_SIZE = 10
 TEXT_FONT_SIZE = 10
 SMALL_FONT_SIZE = 9
+OWNER_FONT_SIZE = 12
+PHONE_FONT_SIZE = 10
 
 # Table columns (fit within content width = PAGE_WIDTH - margins = 180mm on A4 with 15mm margins)
 # Widths sum to 180mm: 10 + 102 + 18 + 24 + 26 = 180
@@ -238,6 +240,23 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     title_x = PAGE_WIDTH - MARGIN_RIGHT
     c.drawRightString(title_x, top_y - 6, "INVOICE")
 
+    # Owner name + phone centered at top-left
+    try:
+        owner = _get(data, "settings.owner", None) or _get(data, "business.owner", None) or ""
+        phone = _get(data, "settings.phone", None) or _get(data, "business.phone", None) or ""
+        if owner or phone:
+            center_x = MARGIN_LEFT + (LOGO_WIDTH / 2)
+            y_owner = top_y - 4
+            if owner:
+                c.setFont(bold_font, OWNER_FONT_SIZE)
+                c.drawCentredString(center_x, y_owner, str(owner))
+                y_owner -= 12
+            if phone:
+                c.setFont(font, PHONE_FONT_SIZE)
+                c.drawCentredString(center_x, y_owner, str(phone))
+    except Exception:
+        pass
+
     # A separating line below header
     y = top_y - HEADER_HEIGHT
     # Header rule slightly bolder
@@ -409,6 +428,19 @@ def _draw_totals(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: 
     tax = round(sub * tax_rate, 2)
     total = round(sub + tax, 2)
 
+    # Thank you line immediately above totals
+    c.setFont(font, TEXT_FONT_SIZE)
+    thanks = (
+        _get(data, "settings.thank_you", None)
+        or _get(data, "business.thank_you", None)
+        or "Thank you for choosing KMC!"
+    )
+    # Ensure the thanks line sits above signature area if space is tight
+    min_y = MARGIN_BOTTOM + SIGN_BOX_H + (8 * mm)
+    y = max(y, min_y)
+    c.drawString(MARGIN_LEFT, y, str(thanks))
+    y -= ROW_HEIGHT
+
     # separator line above totals (slightly thicker)
     prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
@@ -426,7 +458,7 @@ def _draw_totals(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: 
     c.drawRightString(AMT_X + AMT_W - 2, y, f"{sub:.2f}")
     y -= ROW_HEIGHT
 
-    tax_label = f"Tax ({tax_rate:.0f}%)" if tax_rate else "Tax"
+    tax_label = f"Tax ({tax_rate*100:.0f}%)" if tax_rate else "Tax"
     c.drawRightString(RATE_X + RATE_W - 2, y, f"{tax_label}:")
     c.drawRightString(AMT_X + AMT_W - 2, y, f"{tax:.2f}")
     y -= ROW_HEIGHT
@@ -434,20 +466,8 @@ def _draw_totals(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], y: 
     c.setFont(bold_font, TEXT_FONT_SIZE + 1)
     c.drawRightString(RATE_X + RATE_W - 2, y, "Total:")
     c.drawRightString(AMT_X + AMT_W - 2, y, f"{total:.2f}")
-    y -= ROW_HEIGHT + THANK_YOU_GAP
-
-    # Thank you line
-    c.setFont(font, TEXT_FONT_SIZE)
-    thanks = (
-        _get(data, "settings.thank_you", None)
-        or _get(data, "business.thank_you", None)
-        or "Thank you for choosing KMC!"
-    )
-    # Ensure thank-you line sits above signature box area if space is tight
-    min_y = MARGIN_BOTTOM + SIGN_BOX_H + (8 * mm)
-    y_thanks = max(y, min_y)
-    c.drawString(MARGIN_LEFT, y_thanks, str(thanks))
-    return y_thanks - ROW_HEIGHT
+    y -= ROW_HEIGHT
+    return y
 
 
 def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
