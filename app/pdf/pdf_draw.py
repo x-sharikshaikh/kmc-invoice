@@ -253,9 +253,9 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
             pass
 
     # Define baseline for owner/phone and INVOICE relative to top margin.
-    # This baseline sits roughly 13mm below the top margin, which centres the text
-    # vertically on the 24mm logo.
-    baseline_y = top_y - 13 * mm
+    # Compute the baseline so that the owner text sits roughly 40% down from the top of the logo.
+    # This places it nicely relative to the logo height.
+    baseline_y = top_y - (LOGO_HEIGHT * 0.4)
 
     # Compute X positions
     owner_x = MARGIN_LEFT + LOGO_WIDTH + 6  # start of owner text
@@ -270,7 +270,7 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
             c.drawString(owner_x, baseline_y, str(owner))
         if phone:
             c.setFont(font, PHONE_FONT_SIZE)
-            c.drawString(owner_x, baseline_y - 4.5 * mm, f"Mobile No:{phone}")
+            c.drawString(owner_x, baseline_y - 4 * mm, f"Mobile No:{phone}")
     except Exception:
         pass
 
