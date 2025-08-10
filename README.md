@@ -36,9 +36,17 @@ Legacy template option (optional):
 
 3. Launch the app
 
-    ```powershell
-    python app/main.py
-    ```
+  Recommended (runs as a module):
+
+  ```powershell
+  python -m app.main
+  ```
+
+  Or run the script directly:
+
+  ```powershell
+  python app/main.py
+  ```
 
 PDFs are saved to `~/Documents/KMC Invoices`.
 

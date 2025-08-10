@@ -19,12 +19,13 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QTextEdit,
     QDateEdit,
-    QTableWidget,
-    QTableWidgetItem,
+    # QTableWidget,
+    # QTableWidgetItem,
     QStyledItemDelegate,
     QPushButton,
     QSpacerItem,
     QSizePolicy,
+    QDialog,
 )
 
 from app.core.currency import fmt_money, round_money
@@ -32,6 +33,7 @@ from app.core.settings import load_settings, Settings
 from app.core.numbering import next_invoice_number, peek_next_invoice_number
 from app.data.db import create_db_and_tables, get_session
 from app.core.paths import resource_path
+from app.widgets.line_items_widget import LineItemsWidget
 
 
 class LineItemDelegate(QStyledItemDelegate):
@@ -57,17 +59,16 @@ class MainWindow(QMainWindow):
     dark_mode: bool = False
 
     def _recalc_subtotal_tax_total(self) -> None:
-        sub = 0.0
-        rows = self.table.rowCount()
-        for r in range(rows):
-            item = self.table.item(r, 4)
-            try:
-                sub += float(item.text()) if item and item.text() else 0.0
-            except Exception:
-                pass
-        tax = round_money(sub * float(self.settings.tax_rate))
-        total = round_money(sub + tax)
-        self.subtotal_value.setText(fmt_money(sub))
+        # Compute totals from the new LineItemsWidget
+        subtotal = 0.0
+        try:
+            for it in self.items.get_items():
+                subtotal += float(it.get('amount', 0.0))
+        except Exception:
+            pass
+        tax = round_money(subtotal * float(self.settings.tax_rate))
+        total = round_money(subtotal + tax)
+        self.subtotal_value.setText(fmt_money(subtotal))
         self.tax_value.setText(fmt_money(tax))
         self.total_value.setText(fmt_money(total))
 
@@ -183,6 +184,13 @@ class MainWindow(QMainWindow):
 
         top.addWidget(bill_card, 1)
         top.addWidget(info_card, 1)
+        # Align heights: ensure both cards have same minimum height
+        try:
+            mh = max(bill_card.sizeHint().height(), info_card.sizeHint().height())
+            bill_card.setMinimumHeight(mh)
+            info_card.setMinimumHeight(mh)
+        except Exception:
+            pass
         root_layout.addLayout(top)
 
         # Line items area wrapped in a Card to match upper sections
@@ -195,45 +203,16 @@ class MainWindow(QMainWindow):
         items_title.setObjectName("SectionTitle")
         items_layout.addWidget(items_title)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Sl.", "Description", "Qty", "Rate", "Amount"])
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setAlternatingRowColors(True)
-        # Ensure comfortable row height so text/editors aren't clipped
-        try:
-            self.table.verticalHeader().setDefaultSectionSize(44)
-        except Exception:
-            pass
-        # Use delegate with insets so editors don't touch cell borders
-        self.table.setItemDelegate(LineItemDelegate(self.table, inset=6))
-        # Column sizing: Description stretches; set sensible minimum widths for Qty/Rate
-        try:
-            hdr = self.table.horizontalHeader()
-            hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-            hdr.setSectionResizeMode(1, QHeaderView.Stretch)
-            hdr.setSectionResizeMode(2, QHeaderView.Interactive)
-            hdr.setSectionResizeMode(3, QHeaderView.Interactive)
-            hdr.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-            hdr.setMinimumSectionSize(70)
-            self.table.setColumnWidth(2, 80)   # Qty
-            self.table.setColumnWidth(3, 100)  # Rate
-        except Exception:
-            pass
-        # Center and bold header text
-        try:
-            self.table.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
-        except Exception:
-            pass
-        items_layout.addWidget(self.table)
+        # Use the new rows-based widget
+        self.items = LineItemsWidget(self)
+        self.items.totalsChanged.connect(self._update_totals_from_subtotal)
+        items_layout.addWidget(self.items)
 
-        # Table buttons (inside the card, aligned right)
+        # Table buttons (inside the card, aligned right) — only Add (rows have their own remove)
         table_btns = QHBoxLayout()
         add_btn = QPushButton("Add Row")
-        rm_btn = QPushButton("Remove Row")
         table_btns.addStretch(1)
         table_btns.addWidget(add_btn)
-        table_btns.addWidget(rm_btn)
         items_layout.addLayout(table_btns)
 
         root_layout.addWidget(items_card)
@@ -298,18 +277,18 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
         # Signals
-        add_btn.clicked.connect(self.add_row)
-        rm_btn.clicked.connect(self.remove_selected_rows)
-        self.table.itemChanged.connect(self.on_item_changed)
+        add_btn.clicked.connect(lambda: self.items.add_row())
         self.btn_new_invoice.clicked.connect(self.new_invoice)
         self.btn_customers.clicked.connect(self.open_customers)
 
         # Style (light theme by default)
         self.apply_styles()
 
-        # Seed with one empty row
-        self.add_row()
-        self._recalc_subtotal_tax_total()
+        # Seed totals from initial row
+        try:
+            self._update_totals_from_subtotal(0.0)
+        except Exception:
+            pass
 
     def new_invoice(self) -> None:
         """Clear form fields, reset table, set date to today, and peek next invoice number."""
@@ -317,11 +296,17 @@ class MainWindow(QMainWindow):
         self.name_edit.clear()
         self.phone_edit.clear()
         self.addr_edit.clear()
-        # Reset table to a single empty row
-        self.table.setRowCount(0)
-        self.add_row()
-        # Reset totals
-        self._recalc_subtotal_tax_total()
+        # Reset items to a single empty row
+        try:
+            # remove all existing rows
+            while self.items.vbox.count():
+                w = self.items.vbox.itemAt(0).widget()
+                if w:
+                    self.items.remove_row(w)
+            self.items.add_row()
+            self._update_totals_from_subtotal(0.0)
+        except Exception:
+            pass
         # Reset date to today
         try:
             self.date_edit.setDate(QDate.currentDate())
@@ -348,13 +333,14 @@ class MainWindow(QMainWindow):
         except Exception:
             return
         dlg = CustomersDialog(self)
-        if dlg.exec() == dlg.Accepted and dlg.selected is not None:
+        result = dlg.exec()
+        if result == QDialog.Accepted and getattr(dlg, 'selected', None) is not None:
             cust = dlg.selected
             # Prefill BILL TO
             try:
-                self.name_edit.setText(cust.name or "")
-                self.phone_edit.setText(cust.phone or "")
-                self.addr_edit.setPlainText(cust.address or "")
+                self.name_edit.setText(getattr(cust, 'name', '') or "")
+                self.phone_edit.setText(getattr(cust, 'phone', '') or "")
+                self.addr_edit.setPlainText(getattr(cust, 'address', '') or "")
             except Exception:
                 pass
 
@@ -369,25 +355,13 @@ class MainWindow(QMainWindow):
         QHeaderView::section {
             font-size: 14px; padding: 8px; font-weight: 600; background: #f2f2f2; border: 0px; border-bottom: 1px solid #ddd;
         }
-        /* Table inside card: remove outer border so the card provides it */
-        QTableWidget { border: 0; border-radius: 8px; background: #ffffff; gridline-color: #ececec; }
-        QTableView { outline: 0; }
-        QTableView::item:focus { outline: none; }
-        QTableWidget::item { padding: 6px 8px; }
-        /* Make in-cell editors (e.g., Description) match card inputs */
-        QLineEdit#CellEditor {
-            padding: 8px 12px; min-height: 30px; border: 1px solid #cfcfcf; border-radius: 10px;
-            background: #ffffff; color: #222;
-        }
-        QLineEdit#CellEditor:focus { border: 1px solid #5b8def; }
-        /* Keep selection subtle so the rounded editor stands out */
-        QTableView::item:selected { background: transparent; }
-        QLineEdit, QTextEdit, QDateEdit {
+        /* Inputs: make them consistent with card styling */
+        QLineEdit, QTextEdit, QDateEdit, QDoubleSpinBox {
             border: 1px solid #cfcfcf; border-radius: 10px; padding: 8px; background: #ffffff;
         }
     QDateEdit::drop-down { width: 20px; }
     QDateEdit::down-button, QDateEdit::up-button { width: 16px; }
-        QLineEdit:focus, QTextEdit:focus, QDateEdit:focus { border: 1px solid #5b8def; }
+        QLineEdit:focus, QTextEdit:focus, QDateEdit:focus, QDoubleSpinBox:focus { border: 1px solid #5b8def; }
         QPushButton {
             padding: 9px 16px; border-radius: 10px; border: 1px solid #d0d0d0; background: #ffffff;
         }
@@ -470,61 +444,12 @@ class MainWindow(QMainWindow):
                 app.setStyleSheet("")
             self.apply_styles()
 
-    def add_row(self) -> None:
-        r = self.table.rowCount()
-        self.table.insertRow(r)
-        # Sl.
-        sl = QTableWidgetItem(str(r + 1))
-        sl.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-        sl.setTextAlignment(Qt.AlignCenter)
-        self.table.setItem(r, 0, sl)
-        # Description
-        self.table.setItem(r, 1, QTableWidgetItem(""))
-        # Qty
-        qty_it = QTableWidgetItem("0")
-        qty_it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.table.setItem(r, 2, qty_it)
-        # Rate
-        rate_it = QTableWidgetItem("0.00")
-        rate_it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.table.setItem(r, 3, rate_it)
-        # Amount (read-only)
-        amt = QTableWidgetItem("0.00")
-        amt.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-        amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.table.setItem(r, 4, amt)
-
-    def remove_selected_rows(self) -> None:
-        selected = sorted({idx.row() for idx in self.table.selectedIndexes()}, reverse=True)
-        for r in selected:
-            self.table.removeRow(r)
-        # Renumber Sl.
-        for i in range(self.table.rowCount()):
-            it = self.table.item(i, 0)
-            if it:
-                it.setText(str(i + 1))
-        self._recalc_subtotal_tax_total()
-
-    def on_item_changed(self, item: QTableWidgetItem) -> None:
-        r, c = item.row(), item.column()
-        if c in (2, 3, 1):  # qty or rate or description
-            try:
-                qty = float(self.table.item(r, 2).text()) if self.table.item(r, 2) else 0.0
-                rate = float(self.table.item(r, 3).text()) if self.table.item(r, 3) else 0.0
-                amt_val = round_money(qty * rate)
-            except Exception:
-                amt_val = 0.0
-            # Set amount without re-triggering
-            self.table.blockSignals(True)
-            if self.table.item(r, 4) is None:
-                amt_item = QTableWidgetItem(fmt_money(amt_val))
-                amt_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                amt_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                self.table.setItem(r, 4, amt_item)
-            else:
-                self.table.item(r, 4).setText(fmt_money(amt_val))
-            self.table.blockSignals(False)
-            self._recalc_subtotal_tax_total()
+    def _update_totals_from_subtotal(self, subtotal: float) -> None:
+        tax = round_money(subtotal * float(self.settings.tax_rate))
+        total = round_money(subtotal + tax)
+        self.subtotal_value.setText(fmt_money(subtotal))
+        self.tax_value.setText(fmt_money(tax))
+        self.total_value.setText(fmt_money(total))
 
     def collect_data(self) -> dict:
         """Collect form data for DB save and PDF build.
@@ -540,24 +465,11 @@ class MainWindow(QMainWindow):
         inv_date = _date(qd.year(), qd.month(), qd.day())
 
         # Items
-        items: list[dict] = []
-        rows = self.table.rowCount()
-        for r in range(rows):
-            desc_it = self.table.item(r, 1)
-            qty_it = self.table.item(r, 2)
-            rate_it = self.table.item(r, 3)
-            amt_it = self.table.item(r, 4)
-            def _f(it):
-                try:
-                    return float(it.text()) if it and it.text() else 0.0
-                except Exception:
-                    return 0.0
-            items.append({
-                'description': (desc_it.text() if desc_it else '').strip(),
-                'qty': _f(qty_it),
-                'rate': _f(rate_it),
-                'amount': _f(amt_it),
-            })
+        items = []
+        try:
+            items = self.items.get_items()
+        except Exception:
+            pass
 
         subtotal = round_money(sum(i['amount'] for i in items))
         tax = round_money(subtotal * float(self.settings.tax_rate))
@@ -619,20 +531,25 @@ class MainWindow(QMainWindow):
         # Reset edits
         for w in (self.name_edit, self.phone_edit, self.addr_edit):
             w.setStyleSheet("")
-        # Reset table cell backgrounds for Description/Qty/Rate
-        rows = self.table.rowCount()
-        for r in range(rows):
-            for c in (1, 2, 3):
-                it = self.table.item(r, c)
-                if it:
-                    it.setBackground(QBrush())
+        # Reset per-row editor styles in LineItemsWidget
+        try:
+            count = self.items.vbox.count()
+            for i in range(count):
+                roww = self.items.vbox.itemAt(i).widget()
+                if not roww:
+                    continue
+                for attr in ("desc_edit", "qty_spin", "rate_spin"):
+                    ed = getattr(roww, attr, None)
+                    if ed and hasattr(ed, "setStyleSheet"):
+                        ed.setStyleSheet("")
+        except Exception:
+            pass
 
-    def _mark_cell_invalid(self, row: int, col: int) -> None:
-        it = self.table.item(row, col)
-        if not it:
-            it = QTableWidgetItem("")
-            self.table.setItem(row, col, it)
-        it.setBackground(QColor(255, 230, 230))  # light red
+    def _mark_field_invalid(self, widget) -> None:
+        try:
+            widget.setStyleSheet("border: 1px solid #e07070;")
+        except Exception:
+            pass
 
     def validate_form(self) -> list[str]:
         """Validate required fields and highlight invalid cells. Returns issue strings."""
@@ -644,48 +561,47 @@ class MainWindow(QMainWindow):
             self.name_edit.setStyleSheet("border: 1px solid #e07070;")
             issues.append("Customer name is required.")
 
-        # Validate line items
-        rows = self.table.rowCount()
+        # Validate line items (new widget)
         valid_row_found = False
-        for r in range(rows):
-            desc = (self.table.item(r, 1).text().strip() if self.table.item(r, 1) else "")
-            qty_text = (self.table.item(r, 2).text().strip() if self.table.item(r, 2) else "")
-            rate_text = (self.table.item(r, 3).text().strip() if self.table.item(r, 3) else "")
+        try:
+            count = self.items.vbox.count()
+        except Exception:
+            count = 0
+        for i in range(count):
+            roww = self.items.vbox.itemAt(i).widget()
+            if not roww:
+                continue
+            desc = getattr(roww, "desc_edit", None)
+            qty = getattr(roww, "qty_spin", None)
+            rate = getattr(roww, "rate_spin", None)
+            desc_text = (desc.text().strip() if desc else "")
+            try:
+                qty_val = float(qty.value()) if qty else 0.0
+            except Exception:
+                qty_val = 0.0
+            try:
+                rate_val = float(rate.value()) if rate else 0.0
+            except Exception:
+                rate_val = 0.0
 
-            # Consider row empty if all blank/zero
-            def _to_float(t: str) -> float | None:
-                try:
-                    return float(t) if t != "" else 0.0
-                except Exception:
-                    return None
-
-            qty = _to_float(qty_text)
-            rate = _to_float(rate_text)
-
-            is_empty = (desc == "" and (qty_text == "" or qty == 0.0) and (rate_text == "" or rate == 0.0))
+            is_empty = (desc_text == "" and qty_val == 0.0 and rate_val == 0.0)
             if is_empty:
                 continue
 
             row_ok = True
-            if not desc:
-                self._mark_cell_invalid(r, 1)
-                issues.append(f"Row {r+1}: Description is required.")
+            if not desc_text and desc:
+                self._mark_field_invalid(desc)
+                issues.append(f"Row {i+1}: Description is required.")
                 row_ok = False
-            if qty is None:
-                self._mark_cell_invalid(r, 2)
-                issues.append(f"Row {r+1}: Qty must be a number.")
+            if qty is None or qty_val <= 0:
+                if qty:
+                    self._mark_field_invalid(qty)
+                issues.append(f"Row {i+1}: Qty must be > 0.")
                 row_ok = False
-            elif qty <= 0:
-                self._mark_cell_invalid(r, 2)
-                issues.append(f"Row {r+1}: Qty must be > 0.")
-                row_ok = False
-            if rate is None:
-                self._mark_cell_invalid(r, 3)
-                issues.append(f"Row {r+1}: Rate must be a number.")
-                row_ok = False
-            elif rate <= 0:
-                self._mark_cell_invalid(r, 3)
-                issues.append(f"Row {r+1}: Rate must be > 0.")
+            if rate is None or rate_val <= 0:
+                if rate:
+                    self._mark_field_invalid(rate)
+                issues.append(f"Row {i+1}: Rate must be > 0.")
                 row_ok = False
 
             valid_row_found = valid_row_found or row_ok

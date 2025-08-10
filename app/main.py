@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+# Allow running this file directly (python app/main.py) by ensuring the project root is on sys.path
+import os
+import sys
+if __package__ in (None, ""):
+    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut
-from PySide6.QtWidgets import QApplication, QTableWidgetItem, QMessageBox, QDialog
+from PySide6.QtWidgets import QApplication, QMessageBox, QDialog
 
 from app.ui_main import create_main_window
 from app.core.settings import load_settings, save_settings, Settings
@@ -21,29 +27,43 @@ import logging
 logger = logging.getLogger(__name__)
 from app.core.numbering import bump_sequence_to_at_least, peek_next_invoice_number
 
-
 SAVE_DIR = Path.home() / "Documents" / "KMC Invoices"
 
 
-def _collect_items_from_table(win) -> List[Dict[str, Any]]:
+def _collect_items(win) -> List[Dict[str, Any]]:
+    """Collect line items from the new LineItemsWidget when present, or fall back to any legacy table if available."""
+    # Preferred: new rows-based widget
+    try:
+        if hasattr(win, "items") and hasattr(win.items, "get_items"):
+            return list(win.items.get_items())  # type: ignore[no-any-return]
+    except Exception:
+        pass
+    # Fallback: legacy QTableWidget path (best-effort, avoid hard dependency on Qt item classes)
     items: List[Dict[str, Any]] = []
-    rows = win.table.rowCount()
-    for r in range(rows):
-        desc_it = win.table.item(r, 1)
-        qty_it = win.table.item(r, 2)
-        rate_it = win.table.item(r, 3)
-        amt_it = win.table.item(r, 4)
-        def _f(it: QTableWidgetItem | None) -> float:
-            try:
-                return float(it.text()) if it and it.text() else 0.0
-            except Exception:
-                return 0.0
-        items.append({
-            "description": (desc_it.text() if desc_it else "").strip(),
-            "qty": _f(qty_it),
-            "rate": _f(rate_it),
-            "amount": _f(amt_it),
-        })
+    t = getattr(win, "table", None)
+    try:
+        if t is None:
+            return items
+        rows = t.rowCount()
+        for r in range(rows):
+            desc_it = t.item(r, 1)
+            qty_it = t.item(r, 2)
+            rate_it = t.item(r, 3)
+            amt_it = t.item(r, 4)
+            def _to_f(it) -> float:
+                try:
+                    return float(it.text()) if it and it.text() else 0.0
+                except Exception:
+                    return 0.0
+            items.append({
+                "description": (desc_it.text() if desc_it else "").strip(),
+                "qty": _to_f(qty_it),
+                "rate": _to_f(rate_it),
+                "amount": _to_f(amt_it),
+            })
+    except Exception:
+        # If anything goes wrong, return what we have
+        pass
     return items
 
 
@@ -60,7 +80,7 @@ def _save_draft_to_db(win) -> Dict[str, Any]:
     qd = win.date_edit.date()
     from datetime import date as _date
     inv_date = _date(qd.year(), qd.month(), qd.day())
-    items = _collect_items_from_table(win)
+    items = _collect_items(win)
     subtotal = sum(i["amount"] for i in items)
     tax = subtotal * float(settings.tax_rate)
     total = subtotal + tax
@@ -89,24 +109,63 @@ def _ensure_save_dir() -> Path:
 
 
 def _wire_shortcuts(win) -> None:
-    # Enter/Return -> Add Row (when table or its editor has focus)
-    def _add_if_table():
-        fw = win.focusWidget()
-        # Apply when table or editing a cell
-        if fw is win.table or (fw and fw.parent() is win.table):
-            win.add_row()
+    # Enter/Return -> Add Row (when focus is within the items widget)
+    def _is_within_items_widget() -> bool:
+        try:
+            fw = win.focusWidget()
+            w = fw
+            while w is not None:
+                if w is getattr(win, "items", None):
+                    return True
+                w = w.parentWidget() if hasattr(w, "parentWidget") else None
+        except Exception:
+            return False
+        return False
+
+    def _add_if_in_items():
+        if _is_within_items_widget() and hasattr(win, "items"):
+            try:
+                win.items.add_row()
+            except Exception:
+                pass
+
     for key in (Qt.Key_Return, Qt.Key_Enter):
         sc = QShortcut(key, win)
-        sc.activated.connect(_add_if_table)
+        sc.activated.connect(_add_if_in_items)
 
-    # Delete -> Remove selected rows
+    # Delete -> remove the currently focused row (if focus is inside a LineItemRow)
+    def _delete_current_row():
+        try:
+            from app.widgets.line_items_widget import LineItemRow  # local import to avoid cycles if widget absent
+            fw = win.focusWidget()
+            w = fw
+            while w is not None:
+                if isinstance(w, LineItemRow):
+                    if hasattr(win, "items"):
+                        try:
+                            win.items.remove_row(w)
+                        except Exception:
+                            pass
+                    break
+                w = w.parentWidget() if hasattr(w, "parentWidget") else None
+        except Exception:
+            pass
+
     del_sc = QShortcut(Qt.Key_Delete, win)
-    del_sc.activated.connect(win.remove_selected_rows)
+    del_sc.activated.connect(_delete_current_row)
 
-    # Tab order (basic through bill-to and into table)
+    # Tab order (basic through bill-to and into first item description, if available)
     win.setTabOrder(win.name_edit, win.phone_edit)
     win.setTabOrder(win.phone_edit, win.addr_edit)
-    win.setTabOrder(win.addr_edit, win.table)
+    try:
+        first_row = None
+        if hasattr(win, "items") and hasattr(win.items, "vbox") and win.items.vbox.count() > 0:
+            first_row = win.items.vbox.itemAt(0).widget()
+        if first_row and hasattr(first_row, "desc_edit"):
+            win.setTabOrder(win.addr_edit, first_row.desc_edit)
+    except Exception:
+        # If anything fails, skip customizing tab order into items
+        pass
 
 
 def main() -> None:
@@ -215,7 +274,7 @@ def main() -> None:
                     'number': win.inv_number.text().strip(),
                     'date': win.date_edit.date().toString("dd-MM-yyyy"),
                 },
-                'items': _collect_items_from_table(win),
+                'items': _collect_items(win),
             }
         try:
             logger.info("Collected %s items", len(collected.get('items', [])))
