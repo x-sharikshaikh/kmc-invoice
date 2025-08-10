@@ -287,7 +287,8 @@ def _draw_invoice_block(c: Canvas, font: str, data: Dict[str, Any], y_top: float
     date_val = _fmt_date(inv.get("date"))
 
     right_x = PAGE_WIDTH - MARGIN_RIGHT
-    y = y_top - 5 * mm
+    # Align with BILL TO label baseline and use consistent vertical rhythm
+    y = y_top - 6 * mm
     c.drawRightString(right_x, y, f"Number: {number}")
     y -= 4.2 * mm
     c.drawRightString(right_x, y, f"Date: {date_val}")
