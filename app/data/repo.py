@@ -215,11 +215,10 @@ def delete_customer(customer_id: int, *, force: bool = False) -> int:
 		if not cust:
 			return 0
 
-		# Collect invoice ids for this customer
-		inv_ids = [
-			row[0]
-			for row in s.exec(select(Invoice.id).where(Invoice.customer_id == customer_id)).all()
-		]
+		# Collect invoice ids for this customer (robust across SQLAlchemy versions)
+		inv_ids = list(
+			s.exec(select(Invoice.id).where(Invoice.customer_id == customer_id)).scalars().all()
+		)
 
 		if inv_ids and not force:
 			raise ValueError(f"Cannot delete: customer has {len(inv_ids)} invoice(s).")
