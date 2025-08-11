@@ -328,9 +328,9 @@ def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> fl
     c.setFont(bold_font, TEXT_FONT_SIZE)
     c.drawString(SL_X, y, "Sl.")
     c.drawString(DESC_X, y, "Description")
-    c.drawRightString(QTY_X + QTY_W - 2, y, "Qty")
-    c.drawRightString(RATE_X + RATE_W - 2, y, "Rate")
-    c.drawRightString(AMT_X + AMT_W - 2, y, "Amount")
+    c.drawCentredString(QTY_X + QTY_W / 2, y, "Qty")
+    c.drawCentredString(RATE_X + RATE_W / 2, y, "Rate")
+    c.drawCentredString(AMT_X + AMT_W / 2, y, "Amount")
 
     # Header underline and outer border line start
     y -= 3
