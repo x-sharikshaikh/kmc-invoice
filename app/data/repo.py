@@ -188,3 +188,30 @@ def import_customers_csv(path: str | Path) -> int:
 				imported += 1
 	return imported
 
+
+def delete_customer(customer_id: int) -> int:
+	"""Delete a customer by id if they have no invoices.
+
+	Returns 1 if deleted, 0 if not found.
+	Raises ValueError if the customer has existing invoices.
+	"""
+	with session_scope() as s:
+		cust = s.get(Customer, customer_id)
+		if not cust:
+			return 0
+		inv_count = s.exec(
+			select(func.count(Invoice.id)).where(Invoice.customer_id == customer_id)
+		).one()
+		# one() returns a scalar for count in SQLModel/SQLAlchemy 2 style
+		try:
+			count_val = int(inv_count)
+		except Exception:
+			# Fallback for certain SQLModel versions returning tuple
+			count_val = int(inv_count[0]) if isinstance(inv_count, (list, tuple)) else 0
+		if count_val > 0:
+			raise ValueError(f"Cannot delete: customer has {count_val} invoice(s).")
+		s.delete(cust)
+		# flush to ensure deletion is executed before leaving context
+		s.flush()
+		return 1
+
