@@ -29,6 +29,8 @@ HEADER_HEIGHT = 32 * mm
 LOGO_WIDTH = 36 * mm
 LOGO_HEIGHT = 24 * mm
 TITLE_FONT_SIZE = 22
+# Approximate ascent ratio for Helvetica/NotoSans (fraction of font size above baseline)
+TITLE_ASCENT_RATIO = 0.72
 LABEL_FONT_SIZE = 10
 TEXT_FONT_SIZE = 10
 SMALL_FONT_SIZE = 9
@@ -251,16 +253,18 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
         except Exception:
             pass
 
-    # Compute baseline at the vertical centre of the logo (50% of logo height)
-    baseline_y = top_y - (LOGO_HEIGHT * 0.5)
+    # Align the top edge of the INVOICE text with the top edge of the logo
+    # Using an approximate ascent ratio to compute baseline from the top edge
+    fs = TITLE_FONT_SIZE
+    baseline_y = top_y - (TITLE_ASCENT_RATIO * fs)
 
     # Compute X position for the title
     title_x = PAGE_WIDTH - MARGIN_RIGHT     # right‑aligned for "INVOICE"
 
     # No owner/phone text in header
 
-    # "INVOICE" label on the baseline
-    c.setFont(bold_font, TITLE_FONT_SIZE)
+    # "INVOICE" label on the baseline, top-aligned to logo
+    c.setFont(bold_font, fs)
     c.drawRightString(title_x, baseline_y, "INVOICE")
 
     # Draw a horizontal rule below the header (full width)
