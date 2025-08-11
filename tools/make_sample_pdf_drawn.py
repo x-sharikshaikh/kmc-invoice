@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from datetime import date as _date
 from pathlib import Path
+import sys
+
+# Ensure we can import the app package when running this script directly
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from app.pdf.pdf_draw import build_invoice_pdf
 from app.core.settings import load_settings
@@ -53,7 +59,8 @@ def main() -> None:
         "business": {"permit": settings.permit, "pan": settings.pan, "cheque_to": settings.cheque_to},
     }
 
-    out_dir = Path.home() / "Documents" / "KMC Invoices"
+    # Write under repository assets/samples to avoid permission or file-lock issues
+    out_dir = ROOT / "assets" / "samples"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_pdf = out_dir / "SAMPLE_CODE_DRAWN.pdf"
 

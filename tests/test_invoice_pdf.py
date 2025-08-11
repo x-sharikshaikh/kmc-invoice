@@ -48,9 +48,8 @@ def test_invoice_pdf_drawn(tmp_path: Path) -> None:
     assert math.isclose(width, a4w, rel_tol=0, abs_tol=1.0)
     assert math.isclose(height, a4h, rel_tol=0, abs_tol=1.0)
 
-    # Extract text and verify date and total math are present
+    # Extract text and verify total math is present
     text = page.extract_text() or ""
-    assert f"Date: {date_str}" in text
     import re
     # Allow potential newline between label and value in extracted text
     assert re.search(rf"Total:\s*{expected_total:.2f}", text) is not None

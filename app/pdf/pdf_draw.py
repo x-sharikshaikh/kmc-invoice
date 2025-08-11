@@ -284,18 +284,11 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
 
 
 def _draw_invoice_block(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> float:
-    inv = data.get("invoice", {}) or {}
-    number = inv.get("number", "")
-    date_val = _fmt_date(inv.get("date"))
-
-    right_x = PAGE_WIDTH - MARGIN_RIGHT
-    # Align with BILL TO’s first line (6 mm below the header line)
-    y = y_top - 6 * mm
-    c.setFont(font, LABEL_FONT_SIZE)
-    c.drawRightString(right_x, y, f"Invoice No: {number}")
-    y -= 4.2 * mm
-    c.drawRightString(right_x, y, f"Date: {date_val}")
-    return y - 2 * mm
+    # Feature removed: do not draw Invoice No or Date on the right.
+    # Maintain previous vertical spacing so the table alignment with BILL TO remains unchanged.
+    # Previously, this block consumed approximately 12.2 mm in height.
+    y = y_top - (6 * mm + 4.2 * mm + 2 * mm)
+    return y
 
 
 def _draw_bill_to(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> float:
@@ -407,7 +400,7 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
 
 
 # ===== New Table Layout Functions =====
-def build_invoice_table_with_platypus(items: List[Dict[str, Any]], total: float, content_width: float) -> Table:
+def build_invoice_table_with_platypus(items: List[Dict[str, Any]], total: float, content_width: float, filler_height: float = 0.0) -> Table:
     """
     Build the invoice table using the new table layout system.
     This replaces the manual canvas drawing approach.
@@ -423,7 +416,7 @@ def build_invoice_table_with_platypus(items: List[Dict[str, Any]], total: float,
             "amount": float(item.get("amount", 0) or 0)
         })
     
-    return build_invoice_table(lines, total, content_width)
+    return build_invoice_table(lines, total, content_width, filler_height=filler_height)
 
 
 def _draw_table_with_platypus(c: Canvas, items: List[Dict[str, Any]], y_start: float, content_width: float) -> float:
@@ -436,7 +429,18 @@ def _draw_table_with_platypus(c: Canvas, items: List[Dict[str, Any]], y_start: f
     total = sum(float(item.get("amount", 0) or 0) for item in items)
 
     # Build the table flowable
-    table = build_invoice_table_with_platypus(items, total, content_width)
+    # Compute filler height so the table bottom aligns just above the footer area
+    # Reserve a small gap above footer for aesthetics
+    footer_top = MARGIN_BOTTOM + SIGN_BOX_H + 8
+    available_height = max(0.0, (y_start - footer_top))
+
+    # First, estimate height of the table without filler to see how much space remains
+    probe_table = build_invoice_table_with_platypus(items, total, content_width, filler_height=0.0)
+    _w_probe, h_probe = probe_table.wrapOn(c, content_width, PAGE_HEIGHT)
+    filler = max(0.0, available_height - h_probe)
+
+    # Build final table with filler height to extend vertical borders
+    table = build_invoice_table_with_platypus(items, total, content_width, filler_height=filler)
 
     # Ask the table how much space it needs, then draw it starting at y_start
     # wrapOn returns the (width, height) the table will occupy

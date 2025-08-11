@@ -1,6 +1,7 @@
 # app/pdf/table_layout.py
 from reportlab.platypus import Table, TableStyle
 from reportlab.lib import colors
+from reportlab.lib.units import mm
 
 DEFAULT_NUMERIC_WIDTHS = {
     "sl": 28,      # Sl.
@@ -9,12 +10,15 @@ DEFAULT_NUMERIC_WIDTHS = {
     "amount": 90,  # Amount
 }
 
-W_GRID    = 0.50  # inner grid
-W_OUTLINE = W_GRID  # make outline match other lines (not bold)
-W_HEAVY   = 1.10  # header bottom and total separator
+W_GRID    = 0.50  # single border width for all lines
+W_OUTLINE = W_GRID  # outline matches grid
+W_HEAVY   = W_GRID  # header/total separators also match grid
 
-PADDING_V = (4, 4)   # top, bottom
-PADDING_H = (6, 6)   # left, right
+# Consistent row height for even spacing (approx 6 mm)
+BODY_ROW_H = 6 * mm
+
+PADDING_V = (3, 3)   # top, bottom (tighter, reference-like)
+PADDING_H = (5, 5)   # left, right (slightly tighter)
 
 def _col_widths(content_width: float) -> list[float]:
     fixed = (
@@ -32,7 +36,7 @@ def _col_widths(content_width: float) -> list[float]:
         DEFAULT_NUMERIC_WIDTHS["amount"],
     ]
 
-def build_invoice_table(lines: list[dict], total: float, content_width: float):
+def build_invoice_table(lines: list[dict], total: float, content_width: float, filler_height: float = 0.0):
     """
     Build a table that matches Reference Invoice.jpg.
     lines: list of dicts with keys sl, description, qty, rate, amount
@@ -45,10 +49,16 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float):
         data.append([
             row["sl"],
             row["description"],
-            row["qty"],
+            f"{float(row['qty']):.2f}",
             f"{row['rate']:.2f}",
             f"{row['amount']:.2f}",
         ])
+
+    # Optional filler row to stretch vertical borders down to footer top
+    filler_i = None
+    if filler_height and filler_height > 0:
+        data.append(["", "", "", "", ""])  # empty row to fill space
+        filler_i = len(data) - 1
 
     # Combined thank-you and total row (same line):
     #  - Thank you spans columns 0..2 (left side)
@@ -56,7 +66,12 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float):
     data.append(["Thank you for choosing KMC!", "", "", "Total:", f"{total:.2f}"])
     thank_total_i = len(data) - 1
 
-    t = Table(data, colWidths=_col_widths(content_width), repeatRows=1)
+    # Row heights: set body/header/footer to a consistent height; filler gets dynamic height
+    row_heights = [BODY_ROW_H] * len(data)
+    if filler_i is not None:
+        row_heights[filler_i] = max(0.0, float(filler_height))
+
+    t = Table(data, colWidths=_col_widths(content_width), rowHeights=row_heights, repeatRows=1)
 
     ts = TableStyle()
     # Inner grid and outer outline
@@ -71,10 +86,10 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float):
     ts.add("FONTSIZE", (0, 0), (-1, 0), 10)
     ts.add("ALIGN", (0, 0), (0, 0), "CENTER")   # Sl.
     ts.add("ALIGN", (2, 0), (4, 0), "CENTER")   # Qty, Rate, Amount
-    ts.add("LINEBELOW", (0, 0), (-1, 0), W_HEAVY, colors.black)
+    ts.add("LINEBELOW", (0, 0), (-1, 0), W_GRID, colors.black)
 
-    # Body (rows between header and the combined thank/total row)
-    last_body_i = thank_total_i - 1
+    # Body (rows between header and the combined thank/total row, excluding filler if present)
+    last_body_i = (filler_i - 1) if (filler_i is not None) else (thank_total_i - 1)
     if last_body_i >= 1:
         ts.add("FONTSIZE", (0, 1), (-1, last_body_i), 9)
         ts.add("ALIGN", (0, 1), (0, last_body_i), "CENTER")  # Sl.
@@ -99,7 +114,14 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float):
     ts.add("ALIGN", (4, thank_total_i), (4, thank_total_i), "RIGHT")  # amount right-aligned
     ts.add("FONTNAME", (3, thank_total_i), (4, thank_total_i), "Helvetica-Bold")
     ts.add("FONTSIZE", (3, thank_total_i), (4, thank_total_i), 12)
-    ts.add("LINEABOVE", (0, thank_total_i), (-1, thank_total_i), W_HEAVY, colors.black)
+    ts.add("LINEABOVE", (0, thank_total_i), (-1, thank_total_i), W_GRID, colors.black)
+
+    # Hide any filler text (keep grid for vertical lines)
+    if filler_i is not None:
+        ts.add("TEXTCOLOR", (0, filler_i), (-1, filler_i), colors.white)
+
+    # Vertically center all cells
+    ts.add("VALIGN", (0, 0), (-1, -1), "MIDDLE")
 
     t.setStyle(ts)
     return t
