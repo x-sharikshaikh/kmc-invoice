@@ -34,6 +34,8 @@ TITLE_FONT_SIZE = 22
 TITLE_ASCENT_RATIO = 0.72
 # - Approximate cap height fraction of font size (capital letter height / font size)
 TITLE_CAP_RATIO = 0.70
+# - Target proportion: make the INVOICE text height ~60% of the logo height for visual parity
+TITLE_TO_LOGO_RATIO = 0.60
 LABEL_FONT_SIZE = 10
 TEXT_FONT_SIZE = 10
 SMALL_FONT_SIZE = 9
@@ -257,12 +259,13 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
             pass
 
     # Align the top edge of the INVOICE text with the top edge of the logo
-    # using the font's actual ascent so the visible height matches the logo height.
+    # and size the text to a fraction of the logo height for visual parity.
     try:
         ascent_ratio = (pdfmetrics.getAscent(bold_font) or int(TITLE_ASCENT_RATIO * 1000)) / 1000.0
     except Exception:
         ascent_ratio = TITLE_ASCENT_RATIO
-    fs_target = LOGO_HEIGHT / ascent_ratio
+    target_ascent = LOGO_HEIGHT * TITLE_TO_LOGO_RATIO
+    fs_target = target_ascent / ascent_ratio
     fs_max = (HEADER_HEIGHT - 2)  # small breathing room
     fs = fs_target if fs_target <= fs_max else fs_max
     baseline_y = top_y - (ascent_ratio * fs)
