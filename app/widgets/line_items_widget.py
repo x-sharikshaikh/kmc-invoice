@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QPushButton,
     QFrame,
+    QAbstractSpinBox,
 )
 
 from app.core.currency import round_money, fmt_money
@@ -29,7 +30,7 @@ class LineItemRow(QWidget):
     subtotalChanged = Signal(float)
     removed = Signal(QWidget)
 
-    def __init__(self, row_number: int, description: str = "", qty: float = 1.0, rate: float = 0.0, parent: QWidget | None = None) -> None:
+    def __init__(self, row_number: int, description: str = "", qty: float = 0.0, rate: float = 0.0, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.row_number = row_number
 
@@ -54,27 +55,38 @@ class LineItemRow(QWidget):
         # Qty
         self.qty_spin = QDoubleSpinBox()
         self.qty_spin.setDecimals(3)
-        self.qty_spin.setMinimum(0.001)
+        self.qty_spin.setMinimum(0.0)            # allow 0 quantity
+        self.qty_spin.setMaximum(1_000_000_000)  # allow thousands and beyond
         self.qty_spin.setSingleStep(1.0)
         self.qty_spin.setValue(qty)
         self.qty_spin.setAlignment(Qt.AlignRight)
-        self.qty_spin.setFixedWidth(80)
+        self.qty_spin.setFixedWidth(110)
+        # Hide up/down spinner arrows for a cleaner look
+        try:
+            self.qty_spin.setButtonSymbols(getattr(QAbstractSpinBox, 'NoButtons', QAbstractSpinBox.ButtonSymbols.NoButtons))
+        except Exception:
+            pass
         self.layout.addWidget(self.qty_spin)
-
         # Rate
         self.rate_spin = QDoubleSpinBox()
         self.rate_spin.setDecimals(2)
         self.rate_spin.setMinimum(0.00)
+        self.rate_spin.setMaximum(1_000_000_000)  # allow lakhs and beyond
         self.rate_spin.setSingleStep(1.0)
         self.rate_spin.setValue(rate)
         self.rate_spin.setAlignment(Qt.AlignRight)
-        self.rate_spin.setFixedWidth(100)
+        self.rate_spin.setFixedWidth(120)
+        # Hide up/down spinner arrows for a cleaner look
+        try:
+            self.rate_spin.setButtonSymbols(getattr(QAbstractSpinBox, 'NoButtons', QAbstractSpinBox.ButtonSymbols.NoButtons))
+        except Exception:
+            pass
         self.layout.addWidget(self.rate_spin)
 
         # Amount (right-aligned, fixed min width)
         self.amount_lbl = QLabel(fmt_money(qty * rate))
         self.amount_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.amount_lbl.setFixedWidth(100)
+        self.amount_lbl.setFixedWidth(140)
         self.layout.addWidget(self.amount_lbl)
 
         # Remove button at end
@@ -152,7 +164,7 @@ class LineItemsWidget(QWidget):
         # First row
         self.add_row()
 
-    def add_row(self, description: str = "", qty: float = 1.0, rate: float = 0.0) -> None:
+    def add_row(self, description: str = "", qty: float = 0.0, rate: float = 0.0) -> None:
         n = self.vbox.count() + 1
         row = LineItemRow(n, description, qty, rate)
         row.subtotalChanged.connect(self._on_subtotal_change)

@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
-from reportlab.lib.pagesizes import A4
+from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Spacer
+from reportlab.lib.pagesizes import A4, LETTER
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
@@ -12,6 +13,7 @@ from reportlab.pdfgen.canvas import Canvas
 
 from app.core.paths import resource_path
 from app.core.currency import round_money, fmt_money
+from app.pdf.table_layout import build_invoice_table
 
 
 # ===== Layout constants (tweak here) =====
@@ -323,55 +325,9 @@ def _draw_bill_to(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> f
 
 
 def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> float:
-    # Column titles
-    y = y_top - 0.5 * mm
-    c.setFont(bold_font, TEXT_FONT_SIZE)
-    c.drawString(SL_X, y, "Sl.")
-    c.drawString(DESC_X, y, "Description")
-    # Center the Qty, Rate, Amount headings in their columns
-    c.drawCentredString(QTY_X + QTY_W / 2, y, "Qty")
-    c.drawCentredString(RATE_X + RATE_W / 2, y, "Rate")
-    c.drawCentredString(AMT_X + AMT_W / 2, y, "Amount")
-
-    # Header underline and outer border line start
-    y -= 3
-    # Draw a bolder rule for header
-    hdr_prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-    hdr_prev_stroke = getattr(c, '_strokeColor', None)
-    c.setStrokeColor(RULE_COLOR)
-    c.setLineWidth(1.0)
-    # Top border of the header (outer border top edge) and underline
-    _line(c, SL_X, y_top, TABLE_RIGHT, y_top)
-    _line(c, SL_X, y, TABLE_RIGHT, y)
-    # Compute the body start y (bottom of header block)
-    y_body_start = y_top - HEADER_ROW_HEIGHT
-
-    # Outer vertical borders in solid black; inner splits in gray to match reference grid
-    # Left outer border
-    _line(c, SL_X, y_top, SL_X, y_body_start)
-    # Inner splits (gray) from the top border down to underline, making a continuous framed header
-    prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-    prev_stroke = getattr(c, '_strokeColor', None)
-    c.setLineWidth(0.3)
-    c.setStrokeColor(GRID_COLOR)
-    for x in (DESC_X, QTY_X, RATE_X, AMT_X):
-        _line(c, x, y_top, x, y_body_start)
-    # Right outer border in black
-    c.setStrokeColor(RULE_COLOR)
-    c.setLineWidth(0.7)
-    _line(c, TABLE_RIGHT, y_top, TABLE_RIGHT, y_body_start)
-    # Restore previous stroke settings
-    if prev_w is not None:
-        c.setLineWidth(prev_w)
-    if prev_stroke is not None:
-        c.setStrokeColor(prev_stroke)
-
-    # Restore header-level stroke settings
-    if hdr_prev_w is not None:
-        c.setLineWidth(hdr_prev_w)
-    if hdr_prev_stroke is not None:
-        c.setStrokeColor(hdr_prev_stroke)
-    return y_body_start
+    # This function is now deprecated - table drawing is handled by build_invoice_table
+    # Return a position that accounts for the table header height
+    return y_top - HEADER_ROW_HEIGHT
 
 
 def _ensure_table_within_page(c: Canvas, y_cursor: float, need_height: float) -> bool:
@@ -379,168 +335,19 @@ def _ensure_table_within_page(c: Canvas, y_cursor: float, need_height: float) ->
 
 
 def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y: float, total_items: int | None = None) -> Tuple[float, int]:
-    y = start_y
-    c.setFont(font, TEXT_FONT_SIZE)
-    drawn = 0
-    # If total_items provided, infer base index from slice length so we can compute global indices
-    base_index = 0
-    if total_items is not None:
-        try:
-            base_index = max(0, int(total_items) - len(items))
-        except Exception:
-            base_index = 0
-
-    # vertical column lines (draw progressively with rows)
-    # we’ll draw outer border lines as we go to keep crisp alignment
-    # lighter grid lines for body
-    prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-    prev_stroke = getattr(c, '_strokeColor', None)
-    c.setLineWidth(0.3)
-    c.setStrokeColor(GRID_COLOR)
-
-    for idx, it in enumerate(items, start=1):
-        desc = str(it.get("description", ""))
-        qty = float(it.get("qty", 0) or 0)
-        rate = float(it.get("rate", 0) or 0)
-        amount = float(it.get("amount", qty * rate))
-
-        wrapped = wrap_text(c, desc, DESC_W - 4, font, TEXT_FONT_SIZE)
-        line_count = max(1, len(wrapped))
-        row_h = line_count * ROW_HEIGHT
-
-        # if not enough space for this row above bottom margin, stop (totals handled later)
-        if y - row_h < (MARGIN_BOTTOM + ROW_BOTTOM_GAP):
-            break
-
-    # left/right verticals per row block
-    # draw text
-        row_top = y
-                # Serial aligned to row baseline with trailing dot (matches reference)
-        c.drawString(SL_X + 2, y - row_h + 2, f"{idx}.")
-        # Description multi-line
-        ty = y - ROW_HEIGHT + 2
-        for ln in wrapped:
-            c.drawString(DESC_X + 2, ty, ln)
-            ty -= ROW_HEIGHT
-        # numeric right aligned at row baseline so columns align across 1–2 line rows
-        baseline_y = y - row_h + 2
-        c.drawRightString(QTY_X + QTY_W - 2, baseline_y, _fmt_qty(qty))
-        c.drawRightString(RATE_X + RATE_W - 2, baseline_y, fmt_money(rate))
-        c.drawRightString(AMT_X + AMT_W - 2, baseline_y, fmt_money(amount))
-        prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-        prev_stroke = getattr(c, '_strokeColor', None)
-        c.setLineWidth(0.3)
-        c.setStrokeColor(GRID_COLOR)
-        if total_items is not None:
-            try:
-                global_idx = base_index + (idx - 1)
-                is_last_overall = (global_idx == total_items - 1)
-            except Exception:
-                is_last_overall = False
-        if not is_last_overall:
-            # keep a subtle horizontal separator regardless of style
-            _line(c, SL_X, y - row_h, TABLE_RIGHT, y - row_h)
-
-        # Vertical lines: inner splits gray, outer borders black
-        row_prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-        row_prev_stroke = getattr(c, '_strokeColor', None)
-        # inner splits
-        c.setLineWidth(0.3)
-        c.setStrokeColor(GRID_COLOR)
-        for x in (DESC_X, QTY_X, RATE_X, AMT_X):
-            _line(c, x, row_top, x, y - row_h)
-        # outer borders
-        c.setLineWidth(0.7)
-        c.setStrokeColor(RULE_COLOR)
-        for x in (SL_X, TABLE_RIGHT):
-            _line(c, x, row_top, x, y - row_h)
-
-        # Restore stroke settings before leaving the loop iteration
-        if row_prev_w is not None:
-            c.setLineWidth(row_prev_w)
-        if row_prev_stroke is not None:
-            c.setStrokeColor(row_prev_stroke)
-
-        y -= row_h
-        drawn += 1
-
-    # restore previous line width and color
-    if prev_w is not None:
-        c.setLineWidth(prev_w)
-    if prev_stroke is not None:
-        c.setStrokeColor(prev_stroke)
-    return y, drawn
+    # This function is now deprecated - table drawing is handled by build_invoice_table
+    # Return a position that accounts for the table rows height
+    # Estimate height: header + rows + summary
+    estimated_height = HEADER_ROW_HEIGHT + (len(items) * ROW_HEIGHT) + (2 * ROW_HEIGHT)  # +2 for thank you and total rows
+    return start_y - estimated_height, len(items)
 
 
 def _draw_summary(c: Canvas, font: str, bold_font: str, data: dict, y: float) -> float:
-    """
-    Draws a two-line summary: first line shows the thank-you message across all columns,
-    second line shows the Total label/value in the Rate/Amount columns. Both lines are enclosed
-    by the table’s border and column separators.
-    """
-    prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-    prev_color = getattr(c, '_strokeColor', None)
-    c.setLineWidth(0.5)
-    c.setStrokeColor(RULE_COLOR)
-
-    # First summary row – Thank you
-    row_h = ROW_HEIGHT
-    y_top = y
-    y_bottom = y - row_h
-    # Draw top separator (ties into the previous row’s bottom). Use gray for inner; black for outer.
-    prev_w2 = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-    prev_color2 = getattr(c, '_strokeColor', None)
-    c.setLineWidth(0.3)
-    c.setStrokeColor(GRID_COLOR)
-    _line(c, DESC_X, y_top, TABLE_RIGHT, y_top)
-    # left outer in black
-    c.setStrokeColor(RULE_COLOR)
-    c.setLineWidth(0.7)
-    _line(c, SL_X, y_top, DESC_X, y_top)
-    # Draw vertical lines for all columns
-    for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
-        _line(c, x, y_top, x, y_bottom)
-    # Draw bottom border of this first summary row
-    _line(c, SL_X, y_bottom, TABLE_RIGHT, y_bottom)
-    # Write Thank you message in the Description cell (italic)
-    thanks = _get(data, "settings.thank_you", "Thank you for choosing KMC!")
-    try:
-        c.setFont("Helvetica-Oblique", TEXT_FONT_SIZE)
-    except Exception:
-        c.setFont(font, TEXT_FONT_SIZE)
-    c.drawString(DESC_X + 2, y_bottom + 2, thanks)
-
-    # Second summary row – Total
-    y2_top = y_bottom
-    y2_bottom = y2_top - row_h
-    # Top of second summary row (shared with bottom of first) is already drawn above
-    # Draw vertical lines for all columns
-    for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
-        _line(c, x, y2_top, x, y2_bottom)
-    # Bottom border for the final row (outer in black)
-    c.setLineWidth(0.7)
-    c.setStrokeColor(RULE_COLOR)
-    _line(c, SL_X, y2_bottom, TABLE_RIGHT, y2_bottom)
-    if prev_w2 is not None:
-        c.setLineWidth(prev_w2)
-    if prev_color2 is not None:
-        c.setStrokeColor(prev_color2)
-
-    # Calculate total and draw it (use monetary rounding)
-    from app.core.currency import round_money as _round_money, fmt_money as _fmt_money
-    total = _round_money(sum(float(it.get("amount", 0.0)) for it in data.get("items", [])))
-    c.setFont(bold_font, TEXT_FONT_SIZE + 3)
-    c.drawRightString(RATE_X + RATE_W - 2, y2_bottom + 2, "Total:")
-    c.drawRightString(AMT_X + AMT_W - 2, y2_bottom + 2, _fmt_money(total))
-
-    # Restore previous pen settings
-    if prev_w is not None:
-        c.setLineWidth(prev_w)
-    if prev_color is not None:
-        c.setStrokeColor(prev_color)
-
-    # Return the cursor below the summary rows
-    return y2_bottom
+    # This function is now deprecated - table drawing is handled by build_invoice_table
+    # Return a position that accounts for the summary rows height
+    # Estimate height: thank you row + total row
+    estimated_height = 2 * ROW_HEIGHT
+    return y - estimated_height
 
 
 def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
@@ -599,6 +406,50 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
     c.drawCentredString(bx + SIGN_BOX_W / 2, by + 4, "Authorized Signatory")
 
 
+# ===== New Table Layout Functions =====
+def build_invoice_table_with_platypus(items: List[Dict[str, Any]], total: float, content_width: float) -> Table:
+    """
+    Build the invoice table using the new table layout system.
+    This replaces the manual canvas drawing approach.
+    """
+    # Transform items to match the expected format
+    lines = []
+    for i, item in enumerate(items, 1):
+        lines.append({
+            "sl": f"{i}.",
+            "description": str(item.get("description", "")),
+            "qty": float(item.get("qty", 0) or 0),
+            "rate": float(item.get("rate", 0) or 0),
+            "amount": float(item.get("amount", 0) or 0)
+        })
+    
+    return build_invoice_table(lines, total, content_width)
+
+
+def _draw_table_with_platypus(c: Canvas, items: List[Dict[str, Any]], y_start: float, content_width: float) -> float:
+    """
+    Draw the invoice table using Platypus table layout.
+    Uses wrapOn/drawOn to compute actual height to ensure reliable rendering.
+    Returns the new y cursor (top of content after drawing the table).
+    """
+    # Calculate total for the summary row inside the table
+    total = sum(float(item.get("amount", 0) or 0) for item in items)
+
+    # Build the table flowable
+    table = build_invoice_table_with_platypus(items, total, content_width)
+
+    # Ask the table how much space it needs, then draw it starting at y_start
+    # wrapOn returns the (width, height) the table will occupy
+    _w, h = table.wrapOn(c, content_width, PAGE_HEIGHT)
+
+    # If the table would run below the bottom margin, the caller's pagination
+    # will move to a fresh page; here we simply draw and let higher-level logic
+    # decide when to start a new page for long item lists.
+    table.drawOn(c, MARGIN_LEFT, y_start - h)
+
+    return y_start - h
+
+
 # ===== Public API =====
 def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
     """Draw a complete invoice PDF using ReportLab (A4) with pagination.
@@ -639,10 +490,16 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
 
     y = new_page(first_page=True)
 
+    # Calculate content width for the table
+    content_width = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT
+
     start_index = 0
     while start_index < len(items):
         y_before = y
-        y, drawn = _draw_table_rows(c, font, items[start_index:], y, total_items=len(items))
+        # Use the new Platypus table system instead of deprecated functions
+        y = _draw_table_with_platypus(c, items[start_index:], y, content_width)
+        drawn = len(items[start_index:])  # All remaining items are drawn at once
+        
         if drawn == 0:
             # Not enough space for even one row; start a new page
             c.showPage()
@@ -660,8 +517,7 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
             if (y - need) < MARGIN_BOTTOM:
                 c.showPage()
                 y = new_page(first_page=False)
-            # Draw totals and footer
-            y = _draw_summary(c, font, bold_font, data, y)
+            # Table already includes totals, just draw footer
             _draw_footer(c, font, data)
 
     c.save()
