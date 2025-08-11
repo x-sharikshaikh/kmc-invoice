@@ -21,11 +21,11 @@ PAGE_WIDTH, PAGE_HEIGHT = PAGE_SIZE
 # Margins
 MARGIN_LEFT = 15 * mm
 MARGIN_RIGHT = 15 * mm
-MARGIN_TOP = 15 * mm
-MARGIN_BOTTOM = 15 * mm
+MARGIN_TOP = 18 * mm
+MARGIN_BOTTOM = 18 * mm
 
 # Header
-HEADER_HEIGHT = 20 * mm 
+HEADER_HEIGHT = 20 * mm #32
 LOGO_WIDTH = 36 * mm
 LOGO_HEIGHT = 24 * mm
 TITLE_FONT_SIZE = 25
@@ -259,26 +259,12 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
         except Exception:
             pass
 
-    # Align the top edge of the INVOICE text with the top edge of the logo
-    # and size the text to a fraction of the logo height for visual parity.
-    try:
-        ascent_ratio = (pdfmetrics.getAscent(bold_font) or int(TITLE_ASCENT_RATIO * 1000)) / 1000.0
-    except Exception:
-        ascent_ratio = TITLE_ASCENT_RATIO
-    target_ascent = LOGO_HEIGHT * TITLE_TO_LOGO_RATIO
-    fs_target = target_ascent / ascent_ratio
-    fs_max = (HEADER_HEIGHT - 2)  # small breathing room
-    fs = fs_target if fs_target <= fs_max else fs_max
-    baseline_y = top_y - (ascent_ratio * fs)
+    # Set the header baseline to the vertical middle of the logo
+    baseline_y = top_y - (LOGO_HEIGHT * 0.5)
 
-    # Compute X position for the title
-    title_x = PAGE_WIDTH - MARGIN_RIGHT     # right‑aligned for "INVOICE"
-
-    # No owner/phone text in header
-
-    # "INVOICE" label on the baseline, top-aligned to logo and same visual height
-    c.setFont(bold_font, fs)
-    c.drawRightString(title_x, baseline_y, "INVOICE")
+    # Draw only the word "INVOICE" right-aligned at this baseline
+    c.setFont(bold_font, TITLE_FONT_SIZE)
+    c.drawRightString(PAGE_WIDTH - MARGIN_RIGHT, baseline_y, "INVOICE")
 
     # Draw a horizontal rule below the header (full width)
     line_y = top_y - HEADER_HEIGHT
@@ -296,14 +282,14 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
 
 
 def _draw_invoice_block(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> float:
-    c.setFont(font, LABEL_FONT_SIZE)
-    inv = data.get("invoice", {}) if isinstance(data.get("invoice"), dict) else {}
+    inv = data.get("invoice", {}) or {}
     number = inv.get("number", "")
     date_val = _fmt_date(inv.get("date"))
 
     right_x = PAGE_WIDTH - MARGIN_RIGHT
-    # Align with BILL TO label baseline and use consistent vertical rhythm
+    # Align with BILL TO’s first line (6 mm below the header line)
     y = y_top - 6 * mm
+    c.setFont(font, LABEL_FONT_SIZE)
     c.drawRightString(right_x, y, f"Invoice No: {number}")
     y -= 4.2 * mm
     c.drawRightString(right_x, y, f"Date: {date_val}")
