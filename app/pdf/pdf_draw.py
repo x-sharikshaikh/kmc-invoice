@@ -242,9 +242,9 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     except Exception:
         logo_path = None
 
-    # Position logo: flush to top margin, then move 5 mm up
+    # Position logo: flush to top margin, then move 10 mm up (additional 5 mm)
     logo_x = MARGIN_LEFT
-    logo_y = top_y - LOGO_HEIGHT + 5 * mm
+    logo_y = top_y - LOGO_HEIGHT + 10 * mm
     if logo_path and logo_path.exists():
         try:
             c.drawImage(
