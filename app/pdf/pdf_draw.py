@@ -417,10 +417,10 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
         baseline_y = y - row_h + 2
         c.drawRightString(QTY_X + QTY_W - 2, baseline_y, _fmt_qty(qty))
         c.drawRightString(RATE_X + RATE_W - 2, baseline_y, fmt_money(rate))
-        c.drawRightString(AMT_X + AMT_W - 2, baseline_y, fmt_money(amount))
-
-        # horizontal line under the row block (light); skip for the overall last row
-        is_last_overall = False
+        prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
+        prev_stroke = getattr(c, '_strokeColor', None)
+        c.setLineWidth(0.5)
+        c.setStrokeColor(RULE_COLOR)
         if total_items is not None:
             try:
                 global_idx = base_index + (idx - 1)
