@@ -340,6 +340,8 @@ def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> fl
     hdr_prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(1.0)
+    # Top border of the header (outer border top edge)
+    _line(c, SL_X, y_top, TABLE_RIGHT, y_top)
     _line(c, SL_X, y, TABLE_RIGHT, y)
     # Compute the body start y (bottom of header block)
     y_body_start = y_top - HEADER_ROW_HEIGHT
@@ -480,9 +482,12 @@ def _draw_summary(c: Canvas, font: str, bold_font: str, data: dict, y: float) ->
         _line(c, x, y_top, x, y_bottom)
     # Draw bottom border of this first summary row
     _line(c, SL_X, y_bottom, TABLE_RIGHT, y_bottom)
-    # Write Thank you message in the Description cell
+    # Write Thank you message in the Description cell (italic)
     thanks = _get(data, "settings.thank_you", "Thank you for choosing KMC!")
-    c.setFont(font, TEXT_FONT_SIZE)
+    try:
+        c.setFont("Helvetica-Oblique", TEXT_FONT_SIZE)
+    except Exception:
+        c.setFont(font, TEXT_FONT_SIZE)
     c.drawString(DESC_X + 2, y_bottom + 2, thanks)
 
     # Second summary row – Total
@@ -497,7 +502,7 @@ def _draw_summary(c: Canvas, font: str, bold_font: str, data: dict, y: float) ->
 
     # Calculate total and draw it
     total = round(sum(float(it.get("amount", 0.0)) for it in data.get("items", [])), 2)
-    c.setFont(bold_font, TEXT_FONT_SIZE + 1)
+    c.setFont(bold_font, TEXT_FONT_SIZE + 3)
     c.drawRightString(RATE_X + RATE_W - 2, y2_bottom + 2, "Total:")
     c.drawRightString(AMT_X + AMT_W - 2, y2_bottom + 2, f"{total:.2f}")
 
