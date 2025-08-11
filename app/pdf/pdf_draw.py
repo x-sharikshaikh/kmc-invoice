@@ -45,8 +45,8 @@ PHONE_FONT_SIZE = 10
 
 # Table columns (fit within content width = PAGE_WIDTH - margins = 180mm on A4 with 15mm margins)
 # Widths sum to 180mm: 10 + 102 + 18 + 24 + 26 = 180
-SL_W = 10 * mm
-DESC_W = 102 * mm
+SL_W = 12 * mm
+DESC_W = 100 * mm
 QTY_W = 18 * mm
 RATE_W = 24 * mm
 AMT_W = 26 * mm
@@ -59,8 +59,8 @@ AMT_X = RATE_X + RATE_W
 
 TABLE_RIGHT = AMT_X + AMT_W
 ROW_HEIGHT = 6 * mm
-HEADER_ROW_HEIGHT = 7 * mm
-TABLE_TOP_GAP = 8 * mm  # gap between info blocks and table header (increased for breathing room)
+HEADER_ROW_HEIGHT = 8 * mm
+TABLE_TOP_GAP = 4 * mm  # tighter gap to match reference layout
 
 TOTALS_BLOCK_HEIGHT_MIN = 10 * mm  # smaller minimum needed for single summary row
 THANK_YOU_GAP = 6 * mm
@@ -70,8 +70,8 @@ ROW_BOTTOM_GAP = 4 * mm  # minimal bottom gap beyond page margin
 
 # Colors (print-friendly)
 TEXT_COLOR = colors.black
-RULE_COLOR = colors.black
-GRID_COLOR = colors.Color(0.6, 0.6, 0.6)  # medium gray for table grid
+RULE_COLOR = colors.black           # for outer borders, header rules, totals box
+GRID_COLOR = colors.Color(0.6, 0.6, 0.6)  # medium gray for internal grid lines
 
 
 # ===== Helpers =====
@@ -324,7 +324,7 @@ def _draw_bill_to(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> f
 
 def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> float:
     # Column titles
-    y = y_top
+    y = y_top - 0.5 * mm
     c.setFont(bold_font, TEXT_FONT_SIZE)
     c.drawString(SL_X, y, "Sl.")
     c.drawString(DESC_X, y, "Description")
@@ -340,19 +340,26 @@ def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> fl
     hdr_prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(1.0)
-    # Top border of the header (outer border top edge)
+    # Top border of the header (outer border top edge) and underline
     _line(c, SL_X, y_top, TABLE_RIGHT, y_top)
     _line(c, SL_X, y, TABLE_RIGHT, y)
     # Compute the body start y (bottom of header block)
     y_body_start = y_top - HEADER_ROW_HEIGHT
 
-    # Draw vertical lines for header and outer border in solid black
+    # Outer vertical borders in solid black; inner splits in gray to match reference grid
+    # Left outer border
+    _line(c, SL_X, y_top, SL_X, y_body_start)
+    # Inner splits (gray) from the top border down to underline, making a continuous framed header
     prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-    prev_stroke = getattr(c, "_strokeColor", None)
-    c.setLineWidth(0.5)
+    prev_stroke = getattr(c, '_strokeColor', None)
+    c.setLineWidth(0.3)
+    c.setStrokeColor(GRID_COLOR)
+    for x in (DESC_X, QTY_X, RATE_X, AMT_X):
+        _line(c, x, y_top, x, y)
+    # Right outer border in black
     c.setStrokeColor(RULE_COLOR)
-    for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
-        _line(c, x, y_top, x, y_body_start)
+    c.setLineWidth(0.7)
+    _line(c, TABLE_RIGHT, y_top, TABLE_RIGHT, y)
     # Restore previous stroke settings
     if prev_w is not None:
         c.setLineWidth(prev_w)
@@ -408,7 +415,7 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
     # left/right verticals per row block
     # draw text
         row_top = y
-        # Sl. aligned to row baseline
+        # Serial aligned to row baseline with trailing dot (matches reference)
         c.drawString(SL_X + 2, y - row_h + 2, f"{idx}.")
         # Description multi-line
         ty = y - ROW_HEIGHT + 2
@@ -421,8 +428,8 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
         c.drawRightString(RATE_X + RATE_W - 2, baseline_y, fmt_money(rate))
         prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
         prev_stroke = getattr(c, '_strokeColor', None)
-        c.setLineWidth(0.5)
-        c.setStrokeColor(RULE_COLOR)
+        c.setLineWidth(0.3)
+        c.setStrokeColor(GRID_COLOR)
         if total_items is not None:
             try:
                 global_idx = base_index + (idx - 1)
@@ -433,14 +440,18 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
             # keep a subtle horizontal separator regardless of style
             _line(c, SL_X, y - row_h, TABLE_RIGHT, y - row_h)
 
-        # Use solid black for vertical borders and splits
+        # Vertical lines: inner splits gray, outer borders black
         row_prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
         row_prev_stroke = getattr(c, '_strokeColor', None)
-        c.setLineWidth(0.5)
+        # inner splits
+        c.setLineWidth(0.3)
+        c.setStrokeColor(GRID_COLOR)
+        for x in (DESC_X, QTY_X, RATE_X, AMT_X):
+            _line(c, x, row_top, x, y - row_h)
+        # outer borders
+        c.setLineWidth(0.7)
         c.setStrokeColor(RULE_COLOR)
-
-        # After drawing the text, draw vertical lines for this row block (left border, splits, right border)
-        for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
+        for x in (SL_X, TABLE_RIGHT):
             _line(c, x, row_top, x, y - row_h)
 
         # Restore stroke settings before leaving the loop iteration
@@ -475,8 +486,16 @@ def _draw_summary(c: Canvas, font: str, bold_font: str, data: dict, y: float) ->
     row_h = ROW_HEIGHT
     y_top = y
     y_bottom = y - row_h
-    # Draw top separator (ties into the previous row’s bottom)
-    _line(c, SL_X, y_top, TABLE_RIGHT, y_top)
+    # Draw top separator (ties into the previous row’s bottom). Use gray for inner; black for outer.
+    prev_w2 = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
+    prev_color2 = getattr(c, '_strokeColor', None)
+    c.setLineWidth(0.3)
+    c.setStrokeColor(GRID_COLOR)
+    _line(c, DESC_X, y_top, TABLE_RIGHT, y_top)
+    # left outer in black
+    c.setStrokeColor(RULE_COLOR)
+    c.setLineWidth(0.7)
+    _line(c, SL_X, y_top, DESC_X, y_top)
     # Draw vertical lines for all columns
     for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
         _line(c, x, y_top, x, y_bottom)
@@ -497,14 +516,21 @@ def _draw_summary(c: Canvas, font: str, bold_font: str, data: dict, y: float) ->
     # Draw vertical lines for all columns
     for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
         _line(c, x, y2_top, x, y2_bottom)
-    # Bottom border for the final row
+    # Bottom border for the final row (outer in black)
+    c.setLineWidth(0.7)
+    c.setStrokeColor(RULE_COLOR)
     _line(c, SL_X, y2_bottom, TABLE_RIGHT, y2_bottom)
+    if prev_w2 is not None:
+        c.setLineWidth(prev_w2)
+    if prev_color2 is not None:
+        c.setStrokeColor(prev_color2)
 
-    # Calculate total and draw it
-    total = round(sum(float(it.get("amount", 0.0)) for it in data.get("items", [])), 2)
+    # Calculate total and draw it (use monetary rounding)
+    from app.core.currency import round_money as _round_money, fmt_money as _fmt_money
+    total = _round_money(sum(float(it.get("amount", 0.0)) for it in data.get("items", [])))
     c.setFont(bold_font, TEXT_FONT_SIZE + 3)
     c.drawRightString(RATE_X + RATE_W - 2, y2_bottom + 2, "Total:")
-    c.drawRightString(AMT_X + AMT_W - 2, y2_bottom + 2, f"{total:.2f}")
+    c.drawRightString(AMT_X + AMT_W - 2, y2_bottom + 2, _fmt_money(total))
 
     # Restore previous pen settings
     if prev_w is not None:
@@ -537,7 +563,7 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
         lines.append("Please issue the Cheque in the Name of:")
         lines.append(str(cheque_to).upper())
     if mobile:
-        lines.append(f"Mobile No:{mobile}")
+        lines.append(f"Mobile No: {mobile}")
 
     if lines:
         gap = 11
