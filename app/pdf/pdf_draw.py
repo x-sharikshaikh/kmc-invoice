@@ -457,23 +457,26 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
 
 
 def _draw_summary(c, font, bold_font, data, y):
-    # Draw a thin separator (same thickness as table grid)
+    # Use solid black for the top separator, column lines, and bottom border
     prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_color = getattr(c, '_strokeColor', None)
-    c.setLineWidth(0.3)
-    c.setStrokeColor(GRID_COLOR)
+    c.setLineWidth(0.5)
+    c.setStrokeColor(RULE_COLOR)
+
+    # Top separator
     _line(c, SL_X, y, TABLE_RIGHT, y)
 
     row_h = ROW_HEIGHT
     y_top = y
     y_bottom = y - row_h
 
-    # Draw vertical lines for each column
+    # Column lines
     for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
         _line(c, x, y_top, x, y_bottom)
-    # Bottom border of the summary row
+    # Bottom border
     _line(c, SL_X, y_bottom, TABLE_RIGHT, y_bottom)
 
+    # Restore original stroke settings
     if prev_w is not None:
         c.setLineWidth(prev_w)
     if prev_color is not None:
