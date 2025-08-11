@@ -299,7 +299,7 @@ def _draw_invoice_block(c: Canvas, font: str, data: Dict[str, Any], y_top: float
     #   value_right_x_prev = PAGE_WIDTH - MARGIN_RIGHT + 5mm
     #   label_right_x_prev = value_right_x_prev - 32mm = PAGE_WIDTH - MARGIN_RIGHT - 27mm
     label_right_x = PAGE_WIDTH - MARGIN_RIGHT - (27 * mm)
-    value_right_x = PAGE_WIDTH - MARGIN_RIGHT  # 5mm left from prior value position
+    value_right_x = PAGE_WIDTH - MARGIN_RIGHT - (1 * mm)  # shift values 1mm further left
     # Align with BILL TO’s first line (6 mm below the header line)
     y = y_top - 6 * mm
     c.setFont(font, LABEL_FONT_SIZE)
