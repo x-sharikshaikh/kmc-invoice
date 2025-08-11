@@ -3,12 +3,11 @@ from reportlab.platypus import Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 
-DEFAULT_NUMERIC_WIDTHS = {
-    "sl": 28,      # Sl.
-    "qty": 48,     # Qty
-    "rate": 70,    # Rate
-    "amount": 90,  # Amount
-}
+# Column widths (in mm) to match the reference invoice; Description absorbs remainder
+COL_W_SL = 12 * mm
+COL_W_QTY = 18 * mm
+COL_W_RATE = 24 * mm
+COL_W_AMOUNT = 26 * mm
 
 W_GRID    = 0.50  # single border width for all lines
 W_OUTLINE = W_GRID  # outline matches grid
@@ -21,19 +20,15 @@ PADDING_V = (3, 3)   # top, bottom (tighter, reference-like)
 PADDING_H = (5, 5)   # left, right (slightly tighter)
 
 def _col_widths(content_width: float) -> list[float]:
-    fixed = (
-        DEFAULT_NUMERIC_WIDTHS["sl"]
-        + DEFAULT_NUMERIC_WIDTHS["qty"]
-        + DEFAULT_NUMERIC_WIDTHS["rate"]
-        + DEFAULT_NUMERIC_WIDTHS["amount"]
-    )
-    desc = max(120.0, content_width - fixed)  # Description absorbs remainder
+    fixed = COL_W_SL + COL_W_QTY + COL_W_RATE + COL_W_AMOUNT
+    # Ensure Description gets at least a practical minimum; use the remainder for exact fit
+    desc = max(120.0, content_width - fixed)
     return [
-        DEFAULT_NUMERIC_WIDTHS["sl"],
+        COL_W_SL,
         desc,
-        DEFAULT_NUMERIC_WIDTHS["qty"],
-        DEFAULT_NUMERIC_WIDTHS["rate"],
-        DEFAULT_NUMERIC_WIDTHS["amount"],
+        COL_W_QTY,
+        COL_W_RATE,
+        COL_W_AMOUNT,
     ]
 
 def build_invoice_table(lines: list[dict], total: float, content_width: float, filler_height: float = 0.0):
@@ -91,6 +86,7 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
     # Body (rows between header and the combined thank/total row, excluding filler if present)
     last_body_i = (filler_i - 1) if (filler_i is not None) else (thank_total_i - 1)
     if last_body_i >= 1:
+        ts.add("FONTNAME", (0, 1), (-1, last_body_i), "Helvetica")
         ts.add("FONTSIZE", (0, 1), (-1, last_body_i), 9)
         ts.add("ALIGN", (0, 1), (0, last_body_i), "CENTER")  # Sl.
         ts.add("ALIGN", (2, 1), (2, last_body_i), "CENTER")  # Qty
