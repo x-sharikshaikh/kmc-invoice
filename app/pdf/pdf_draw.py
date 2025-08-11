@@ -253,9 +253,8 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
             pass
 
     # Define baseline for owner/phone and INVOICE relative to top margin.
-    # Compute the baseline so that the owner text sits roughly 60% down from the top of the logo.
-    # This centres the text block vertically with the logo.
-    baseline_y = top_y - (LOGO_HEIGHT * 0.6)
+    # Baseline: 55% down from the top of the logo (aligns owner with logo visually).
+    baseline_y = top_y - (LOGO_HEIGHT * 0.55)
 
     # Compute X positions
     owner_x = MARGIN_LEFT + LOGO_WIDTH + 6  # start of owner text
@@ -275,9 +274,9 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     except Exception:
         pass
 
-    # Title "INVOICE" aligned on the same baseline as owner
+    # “INVOICE” label: raise it by 1 mm to align visually with the owner baseline.
     c.setFont(bold_font, TITLE_FONT_SIZE)
-    c.drawRightString(title_x, baseline_y, "INVOICE")
+    c.drawRightString(title_x, baseline_y + 1 * mm, "INVOICE")
 
     # Draw a horizontal rule below the header (full width)
     line_y = top_y - HEADER_HEIGHT
