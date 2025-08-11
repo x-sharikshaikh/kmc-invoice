@@ -72,6 +72,9 @@ ROW_BOTTOM_GAP = 4 * mm  # minimal bottom gap beyond page margin
 TEXT_COLOR = colors.black
 RULE_COLOR = colors.black
 GRID_COLOR = colors.Color(0.6, 0.6, 0.6)  # medium gray for table grid
+HEADER_BG_COLOR = colors.black
+HEADER_TEXT_COLOR = colors.white
+ROW_ALT_FILL = colors.Color(0.95, 0.95, 0.95)
 
 
 # ===== Helpers =====
@@ -322,15 +325,63 @@ def _draw_bill_to(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> f
     return y - 2 * mm
 
 
-def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> float:
+def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float, style: str = "classic") -> float:
     # Column titles
     y = y_top
     c.setFont(bold_font, TEXT_FONT_SIZE)
-    c.drawString(SL_X, y, "Sl.")
-    c.drawString(DESC_X, y, "Description")
-    c.drawCentredString(QTY_X + QTY_W / 2, y, "Qty")
-    c.drawCentredString(RATE_X + RATE_W / 2, y, "Rate")
-    c.drawCentredString(AMT_X + AMT_W / 2, y, "Amount")
+    if style == "modern":
+        # Filled black header background with white labels
+        y_body_start = y_top - HEADER_ROW_HEIGHT
+        prev_fill = getattr(c, '_fillColor', None)
+        prev_stroke = getattr(c, '_strokeColor', None)
+        prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
+        try:
+            c.setFillColor(HEADER_BG_COLOR)
+            c.setStrokeColor(HEADER_BG_COLOR)
+            c.rect(SL_X, y_body_start, TABLE_RIGHT - SL_X, HEADER_ROW_HEIGHT, stroke=0, fill=1)
+        finally:
+            if prev_stroke is not None:
+                c.setStrokeColor(prev_stroke)
+            if prev_w is not None:
+                c.setLineWidth(prev_w)
+        # Header text in white
+        text_prev = getattr(c, '_fillColor', None)
+        c.setFillColor(HEADER_TEXT_COLOR)
+        c.drawString(SL_X, y, "Sl.")
+        c.drawString(DESC_X, y, "Description")
+        c.drawCentredString(QTY_X + QTY_W / 2, y, "Qty")
+        c.drawCentredString(RATE_X + RATE_W / 2, y, "Rate")
+        c.drawCentredString(AMT_X + AMT_W / 2, y, "Amount")
+        if text_prev is not None:
+            c.setFillColor(text_prev)
+        # Bottom border of header for separation
+        hdr_prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
+        hdr_prev_stroke = getattr(c, '_strokeColor', None)
+        c.setStrokeColor(RULE_COLOR)
+        c.setLineWidth(1.0)
+        _line(c, SL_X, y_body_start, TABLE_RIGHT, y_body_start)
+        # Draw vertical lines to align with body (will be black on black over header)
+        prev_w2 = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
+        prev_stroke2 = getattr(c, "_strokeColor", None)
+        c.setLineWidth(0.5)
+        c.setStrokeColor(RULE_COLOR)
+        for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
+            _line(c, x, y_top, x, y_body_start)
+        if prev_w2 is not None:
+            c.setLineWidth(prev_w2)
+        if prev_stroke2 is not None:
+            c.setStrokeColor(prev_stroke2)
+        if hdr_prev_w is not None:
+            c.setLineWidth(hdr_prev_w)
+        if hdr_prev_stroke is not None:
+            c.setStrokeColor(hdr_prev_stroke)
+        return y_body_start
+    else:
+        c.drawString(SL_X, y, "Sl.")
+        c.drawString(DESC_X, y, "Description")
+        c.drawCentredString(QTY_X + QTY_W / 2, y, "Qty")
+        c.drawCentredString(RATE_X + RATE_W / 2, y, "Rate")
+        c.drawCentredString(AMT_X + AMT_W / 2, y, "Amount")
 
     # Header underline and outer border line start
     y -= 3
@@ -368,7 +419,7 @@ def _ensure_table_within_page(c: Canvas, y_cursor: float, need_height: float) ->
     return (y_cursor - need_height) > (MARGIN_BOTTOM + TOTALS_BLOCK_HEIGHT_MIN)
 
 
-def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y: float, total_items: int | None = None) -> Tuple[float, int]:
+def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y: float, total_items: int | None = None, style: str = "classic") -> Tuple[float, int]:
     y = start_y
     c.setFont(font, TEXT_FONT_SIZE)
     drawn = 0
@@ -403,6 +454,17 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
             break
 
         # left/right verticals per row block
+        # zebra fill for modern style
+        if style == "modern":
+            try:
+                fill_prev = getattr(c, '_fillColor', None)
+                c.setFillColor(ROW_ALT_FILL)
+                # Alternate rows (1-based idx): fill odd rows
+                if idx % 2 == 1:
+                    c.rect(SL_X, y - row_h, TABLE_RIGHT - SL_X, row_h, stroke=0, fill=1)
+            finally:
+                if fill_prev is not None:
+                    c.setFillColor(fill_prev)
         # draw text
         row_top = y
         # Sl. aligned to row baseline
@@ -427,6 +489,7 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
             except Exception:
                 is_last_overall = False
         if not is_last_overall:
+            # keep a subtle horizontal separator regardless of style
             _line(c, SL_X, y - row_h, TABLE_RIGHT, y - row_h)
 
         # Use solid black for vertical borders and splits
@@ -591,14 +654,16 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
         info_y = _draw_invoice_block(c, font, data, y_after_header)
         bill_y = _draw_bill_to(c, font, data, y_after_header)
         table_start_y = min(info_y, bill_y) - TABLE_TOP_GAP
-        return _draw_table_header(c, font, bold_font, table_start_y)
+        style = str(_get(data, 'settings.table_style', 'classic') or 'classic').lower()
+        return _draw_table_header(c, font, bold_font, table_start_y, style=style)
 
     y = new_page(first_page=True)
 
     start_index = 0
     while start_index < len(items):
         y_before = y
-        y, drawn = _draw_table_rows(c, font, items[start_index:], y, total_items=len(items))
+        style = str(_get(data, 'settings.table_style', 'classic') or 'classic').lower()
+        y, drawn = _draw_table_rows(c, font, items[start_index:], y, total_items=len(items), style=style)
         if drawn == 0:
             # Not enough space for even one row; start a new page
             c.showPage()
