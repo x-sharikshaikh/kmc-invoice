@@ -29,8 +29,11 @@ HEADER_HEIGHT = 32 * mm
 LOGO_WIDTH = 36 * mm
 LOGO_HEIGHT = 24 * mm
 TITLE_FONT_SIZE = 22
-# Approximate ascent ratio for Helvetica/NotoSans (fraction of font size above baseline)
+# Typography ratios for alignment
+# - Approximate ascent fraction of font size above baseline (Helvetica/NotoSans)
 TITLE_ASCENT_RATIO = 0.72
+# - Approximate cap height fraction of font size (capital letter height / font size)
+TITLE_CAP_RATIO = 0.70
 LABEL_FONT_SIZE = 10
 TEXT_FONT_SIZE = 10
 SMALL_FONT_SIZE = 9
@@ -254,16 +257,22 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
             pass
 
     # Align the top edge of the INVOICE text with the top edge of the logo
-    # Using an approximate ascent ratio to compute baseline from the top edge
-    fs = TITLE_FONT_SIZE
-    baseline_y = top_y - (TITLE_ASCENT_RATIO * fs)
+    # using the font's actual ascent so the visible height matches the logo height.
+    try:
+        ascent_ratio = (pdfmetrics.getAscent(bold_font) or int(TITLE_ASCENT_RATIO * 1000)) / 1000.0
+    except Exception:
+        ascent_ratio = TITLE_ASCENT_RATIO
+    fs_target = LOGO_HEIGHT / ascent_ratio
+    fs_max = (HEADER_HEIGHT - 2)  # small breathing room
+    fs = fs_target if fs_target <= fs_max else fs_max
+    baseline_y = top_y - (ascent_ratio * fs)
 
     # Compute X position for the title
     title_x = PAGE_WIDTH - MARGIN_RIGHT     # right‑aligned for "INVOICE"
 
     # No owner/phone text in header
 
-    # "INVOICE" label on the baseline, top-aligned to logo
+    # "INVOICE" label on the baseline, top-aligned to logo and same visual height
     c.setFont(bold_font, fs)
     c.drawRightString(title_x, baseline_y, "INVOICE")
 
@@ -507,21 +516,21 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
     cheque_to = biz.get("cheque_to", "") or settings.get("cheque_to", "") or biz.get("chequeTo", "")
     mobile = _get(data, "settings.phone", "") or _get(data, "business.phone", "")
 
-    # Footer lines in the specified order
+    # Footer lines in the annotated image order
     c.setFont(font, SMALL_FONT_SIZE)
-    if permit:
-        c.drawString(x, y, f"Gujarat Gov. Permit No: {permit}")
+    if mobile:
+        c.drawString(x, y, f"Mobile No: {mobile}")
+        y += 11
+    if cheque_to:
+        c.drawString(x, y, cheque_to)
+        y += 11
+        c.drawString(x, y, "Please issue the Cheque in the Name of:")
         y += 11
     if pan:
         c.drawString(x, y, f"PAN No: {pan}")
         y += 11
-    if cheque_to:
-        c.drawString(x, y, "Please issue the Cheque in the Name of:")
-        y += 11
-        c.drawString(x, y, cheque_to)
-        y += 11
-    if mobile:
-        c.drawString(x, y, f"Mobile No:{mobile}")
+    if permit:
+        c.drawString(x, y, f"Gujarat Gov. Permit No: {permit}")
 
     # Authorized Signatory box on right
     bx = PAGE_WIDTH - MARGIN_RIGHT - SIGN_BOX_W
