@@ -62,7 +62,7 @@ AMT_X = RATE_X + RATE_W
 TABLE_RIGHT = AMT_X + AMT_W
 ROW_HEIGHT = 6 * mm
 HEADER_ROW_HEIGHT = 8 * mm
-TABLE_TOP_GAP = 4 * mm  # tighter gap to match reference layout
+TABLE_TOP_GAP = 2 * mm  # reduce gap between BILL TO and table to match reference
 TABLE_Y_SHIFT = 15 * mm  # move table upward by 15 mm (down by 5 mm from previous)
 
 TOTALS_BLOCK_HEIGHT_MIN = 10 * mm  # smaller minimum needed for single summary row
@@ -77,8 +77,9 @@ RULE_COLOR = colors.black           # for outer borders, header rules, totals bo
 GRID_COLOR = colors.Color(0.6, 0.6, 0.6)  # medium gray for internal grid lines
 
 # Footer shifts
-FOOTER_SHIFT = 10 * mm            # move left footer text block up by 5 mm (from 15 to 10)
-SIGN_BOX_EXTRA_SHIFT = 0 * mm     # move signatory box up by 5 mm (remove extra shift)
+FOOTER_SHIFT = 10 * mm            # left footer text block baseline shift
+# Set extra shift so the signature box bottom aligns with the page bottom margin exactly
+SIGN_BOX_EXTRA_SHIFT = -FOOTER_SHIFT
 
 
 # ===== Helpers =====
@@ -445,7 +446,8 @@ def _draw_table_with_platypus(c: Canvas, items: List[Dict[str, Any]], y_start: f
     # Build the table flowable
     # Compute filler height so the table bottom aligns just above the footer area
     # Reserve a small gap above footer for aesthetics. Footer and sign box have shifts applied.
-    footer_top = (MARGIN_BOTTOM - FOOTER_SHIFT - SIGN_BOX_EXTRA_SHIFT) + SIGN_BOX_H + 8
+    # Reserve a smaller gap so vertical lines reach close to the thank-you/total area
+    footer_top = (MARGIN_BOTTOM - FOOTER_SHIFT - SIGN_BOX_EXTRA_SHIFT) + SIGN_BOX_H + 4
     available_height = max(0.0, (y_start - footer_top))
 
     # First, estimate height of the table without filler to see how much space remains

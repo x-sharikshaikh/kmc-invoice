@@ -5,9 +5,9 @@ from reportlab.lib.units import mm
 
 # Column widths (in mm) to match the reference invoice; Description absorbs remainder
 COL_W_SL = 12 * mm
-COL_W_QTY = 18 * mm
-COL_W_RATE = 24 * mm
-COL_W_AMOUNT = 26 * mm
+COL_W_QTY = 16 * mm   # slightly narrower Qty
+COL_W_RATE = 22 * mm  # slightly narrower Rate
+COL_W_AMOUNT = 30 * mm  # wider Amount for large totals
 
 W_GRID    = 0.50  # single border width for all lines
 W_OUTLINE = W_GRID  # outline matches grid
@@ -55,11 +55,11 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
         data.append(["", "", "", "", ""])  # empty row to fill space
         filler_i = len(data) - 1
 
-    # Combined thank-you and total row (same line):
-    #  - Thank you spans columns 0..2 (left side)
-    #  - Column 3 shows "Total:" (right-aligned), column 4 shows amount (right-aligned)
-    data.append(["Thank you for choosing KMC!", "", "", "Total:", f"{total:.2f}"])
-    thank_total_i = len(data) - 1
+    # Separate thank-you row directly above the total row
+    data.append(["Thank you for choosing KMC!", "", "", "", ""])  # thank-you note row
+    thank_i = len(data) - 1
+    data.append(["", "", "", "Total:", f"{total:.2f}"])  # total row
+    total_i = len(data) - 1
 
     # Row heights: set body/header/footer to a consistent height; filler gets dynamic height
     row_heights = [BODY_ROW_H] * len(data)
@@ -84,7 +84,7 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
     ts.add("LINEBELOW", (0, 0), (-1, 0), W_GRID, colors.black)
 
     # Body (rows between header and the combined thank/total row, excluding filler if present)
-    last_body_i = (filler_i - 1) if (filler_i is not None) else (thank_total_i - 1)
+    last_body_i = (filler_i - 1) if (filler_i is not None) else (thank_i - 1)
     if last_body_i >= 1:
         ts.add("FONTNAME", (0, 1), (-1, last_body_i), "Helvetica")
         ts.add("FONTSIZE", (0, 1), (-1, last_body_i), 9)
@@ -98,19 +98,18 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
     ts.add("TOPPADDING",   (0, 0), (-1, -1), PADDING_V[0])
     ts.add("BOTTOMPADDING",(0, 0), (-1, -1), PADDING_V[1])
 
-    # Combined Thank you + Total row styling
-    # Left side span across 0..2 and left-align; right side shows Total label and amount
-    ts.add("SPAN", (0, thank_total_i), (2, thank_total_i))
-    ts.add("FONTNAME", (0, thank_total_i), (0, thank_total_i), "Helvetica-Oblique")
-    ts.add("FONTSIZE", (0, thank_total_i), (0, thank_total_i), 9)
-    ts.add("ALIGN", (0, thank_total_i), (0, thank_total_i), "LEFT")
+    # Thank-you row styling: left side spans across 0..2, slightly above the Total row
+    ts.add("SPAN", (0, thank_i), (2, thank_i))
+    ts.add("FONTNAME", (0, thank_i), (0, thank_i), "Helvetica-Oblique")
+    ts.add("FONTSIZE", (0, thank_i), (0, thank_i), 9)
+    ts.add("ALIGN", (0, thank_i), (0, thank_i), "LEFT")
 
-    # Right side: emphasize the total area
-    ts.add("ALIGN", (3, thank_total_i), (3, thank_total_i), "RIGHT")  # "Total:" aligned to right
-    ts.add("ALIGN", (4, thank_total_i), (4, thank_total_i), "RIGHT")  # amount right-aligned
-    ts.add("FONTNAME", (3, thank_total_i), (4, thank_total_i), "Helvetica-Bold")
-    ts.add("FONTSIZE", (3, thank_total_i), (4, thank_total_i), 12)
-    ts.add("LINEABOVE", (0, thank_total_i), (-1, thank_total_i), W_GRID, colors.black)
+    # Total row styling: emphasize total area with bold font and right alignment
+    ts.add("ALIGN", (3, total_i), (3, total_i), "RIGHT")  # "Total:" right-aligned in its cell
+    ts.add("ALIGN", (4, total_i), (4, total_i), "RIGHT")  # amount right-aligned
+    ts.add("FONTNAME", (3, total_i), (4, total_i), "Helvetica-Bold")
+    ts.add("FONTSIZE", (3, total_i), (4, total_i), 12)
+    ts.add("LINEABOVE", (0, total_i), (-1, total_i), W_GRID, colors.black)
 
     # Hide any filler text (keep grid for vertical lines)
     if filler_i is not None:
