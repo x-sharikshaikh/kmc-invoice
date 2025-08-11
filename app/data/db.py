@@ -89,10 +89,17 @@ def _migrate_drop_invoice_tax(engine) -> None:
 			new_table = old.tometadata(new_meta, name='invoice_new')
 			new_table.create(conn)
 
-			# Copy over columns present in the new schema
+			# Copy over columns present in the new schema, inserting NULL for any new columns
+			# that do not exist in the old table.
+			old_cols_rows = conn.exec_driver_sql("PRAGMA table_info('invoice')").all()
+			old_col_names = {row[1] for row in old_cols_rows}
 			new_cols = [c.name for c in new_table.columns]
 			cols_csv = ", ".join(new_cols)
-			cols_csv_sel = ", ".join(new_cols)
+			select_parts = [
+				(name if name in old_col_names else f"NULL AS {name}")
+				for name in new_cols
+			]
+			cols_csv_sel = ", ".join(select_parts)
 			conn.exec_driver_sql(
 				f"INSERT INTO invoice_new ({cols_csv}) SELECT {cols_csv_sel} FROM invoice"
 			)
@@ -133,9 +140,16 @@ def _migrate_drop_invoice_subtotal(engine) -> None:
 			new_table = old.tometadata(new_meta, name='invoice_new')
 			new_table.create(conn)
 
+			# Copy with NULLs for any new columns not present in the old schema
+			old_cols_rows = conn.exec_driver_sql("PRAGMA table_info('invoice')").all()
+			old_col_names = {row[1] for row in old_cols_rows}
 			new_cols = [c.name for c in new_table.columns]
 			cols_csv = ", ".join(new_cols)
-			cols_csv_sel = ", ".join(new_cols)
+			select_parts = [
+				(name if name in old_col_names else f"NULL AS {name}")
+				for name in new_cols
+			]
+			cols_csv_sel = ", ".join(select_parts)
 			conn.exec_driver_sql(
 				f"INSERT INTO invoice_new ({cols_csv}) SELECT {cols_csv_sel} FROM invoice"
 			)
