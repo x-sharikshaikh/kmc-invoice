@@ -34,8 +34,9 @@ TITLE_FONT_SIZE = 22
 TITLE_ASCENT_RATIO = 0.72
 # - Approximate cap height fraction of font size (capital letter height / font size)
 TITLE_CAP_RATIO = 0.70
-# - Target proportion: make the INVOICE text height ~60% of the logo height for visual parity
-TITLE_TO_LOGO_RATIO = 0.60
+
+# - Target proportion: make the INVOICE text height match the logo height for visual parity
+TITLE_TO_LOGO_RATIO = 0.85
 LABEL_FONT_SIZE = 10
 TEXT_FONT_SIZE = 10
 SMALL_FONT_SIZE = 9
