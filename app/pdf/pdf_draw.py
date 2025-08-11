@@ -242,9 +242,9 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     except Exception:
         logo_path = None
 
-    # Position logo: flush to top margin
+    # Position logo: flush to top margin, then move 5 mm up
     logo_x = MARGIN_LEFT
-    logo_y = top_y - LOGO_HEIGHT
+    logo_y = top_y - LOGO_HEIGHT + 5 * mm
     if logo_path and logo_path.exists():
         try:
             c.drawImage(
@@ -260,7 +260,7 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
             pass
 
     # Set the header baseline to the vertical middle of the logo
-    baseline_y = top_y - (LOGO_HEIGHT * 0.5)
+    baseline_y = logo_y + (LOGO_HEIGHT * 0.5)
 
     # Draw only the word "INVOICE" right-aligned at this baseline
     c.setFont(bold_font, TITLE_FONT_SIZE)
