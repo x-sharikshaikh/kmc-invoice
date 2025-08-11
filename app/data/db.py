@@ -77,6 +77,8 @@ def _migrate_drop_invoice_tax(engine) -> None:
 		import app.data.models  # ensure models loaded
 
 		with engine.begin() as conn:
+			# Clean up any previous partial migration artifacts
+			conn.exec_driver_sql("DROP TABLE IF EXISTS invoice_new")
 			conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
 
 			# Create a new table with the updated schema named invoice_new
@@ -125,12 +127,29 @@ def _migrate_drop_invoice_subtotal(engine) -> None:
 			if 'subtotal' not in col_names:
 				return
 
-		# Rebuild table with updated schema
+			# Try modern SQLite DROP COLUMN first
+			ver_row = conn.exec_driver_sql("select sqlite_version()").first()
+			version = ver_row[0] if ver_row else "0.0.0"
+			def _ver_tuple(v: str) -> tuple[int, int, int]:
+				try:
+					parts = (v or "").split(".")
+					return (int(parts[0]), int(parts[1]), int(parts[2]))
+				except Exception:
+					return (0, 0, 0)
+			if _ver_tuple(version) >= (3, 35, 0):
+				conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+				conn.exec_driver_sql("ALTER TABLE invoice DROP COLUMN subtotal")
+				conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+				return
+
+		# Fallback: rebuild table with updated schema
 		from sqlmodel import SQLModel
 		import app.data.models  # ensure models loaded
 		from sqlalchemy import MetaData
 
 		with engine.begin() as conn:
+			# Clean up any previous partial migration artifacts
+			conn.exec_driver_sql("DROP TABLE IF EXISTS invoice_new")
 			conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
 			old = SQLModel.metadata.tables.get('invoice')
 			if old is None:
@@ -157,7 +176,11 @@ def _migrate_drop_invoice_subtotal(engine) -> None:
 			conn.exec_driver_sql("ALTER TABLE invoice_new RENAME TO invoice")
 			conn.exec_driver_sql("PRAGMA foreign_keys=ON")
 	except Exception:
-		pass
+		# Intentionally swallow to avoid blocking startup, but leave a clue during manual runs
+		try:
+			print("Warning: _migrate_drop_invoice_subtotal failed")
+		except Exception:
+			pass
 
 
 def get_session(echo: bool = False) -> Session:
