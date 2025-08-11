@@ -335,37 +335,32 @@ def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> fl
     # Header underline and outer border line start
     y -= 3
     # Draw a bolder rule for header
-    prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-    prev_stroke = getattr(c, '_strokeColor', None)
+    hdr_prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
+    hdr_prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(1.0)
     _line(c, SL_X, y, TABLE_RIGHT, y)
     # Compute the body start y (bottom of header block)
     y_body_start = y_top - HEADER_ROW_HEIGHT
 
-    # Draw vertical lines for the header area so they connect with body column lines
-    grid_prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-    grid_prev_stroke = getattr(c, '_strokeColor', None)
-    c.setLineWidth(0.3)
-    c.setStrokeColor(GRID_COLOR)
-    # left border and column splits
-    _line(c, SL_X, y_top, SL_X, y_body_start)
-    _line(c, DESC_X, y_top, DESC_X, y_body_start)
-    _line(c, QTY_X, y_top, QTY_X, y_body_start)
-    _line(c, RATE_X, y_top, RATE_X, y_body_start)
-    _line(c, AMT_X, y_top, AMT_X, y_body_start)
-    # right border
-    _line(c, TABLE_RIGHT, y_top, TABLE_RIGHT, y_body_start)
-
-    # Restore stroke settings
-    if grid_prev_w is not None:
-        c.setLineWidth(grid_prev_w)
-    if grid_prev_stroke is not None:
-        c.setStrokeColor(grid_prev_stroke)
+    # Draw vertical lines for header and outer border in solid black
+    prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
+    prev_stroke = getattr(c, "_strokeColor", None)
+    c.setLineWidth(0.5)
+    c.setStrokeColor(RULE_COLOR)
+    for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
+        _line(c, x, y_top, x, y_body_start)
+    # Restore previous stroke settings
     if prev_w is not None:
         c.setLineWidth(prev_w)
     if prev_stroke is not None:
         c.setStrokeColor(prev_stroke)
+
+    # Restore header-level stroke settings
+    if hdr_prev_w is not None:
+        c.setLineWidth(hdr_prev_w)
+    if hdr_prev_stroke is not None:
+        c.setStrokeColor(hdr_prev_stroke)
     return y_body_start
 
 
