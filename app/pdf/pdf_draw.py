@@ -25,7 +25,7 @@ MARGIN_TOP = 18 * mm
 MARGIN_BOTTOM = 18 * mm
 
 # Header
-HEADER_HEIGHT = 20 * mm #32
+HEADER_HEIGHT = 10 * mm 
 LOGO_WIDTH = 36 * mm
 LOGO_HEIGHT = 24 * mm
 TITLE_FONT_SIZE = 25
@@ -242,7 +242,7 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     except Exception:
         logo_path = None
 
-    # Position logo: flush to top margin, then move 10 mm up (additional 5 mm)
+    # Position logo: flush to top margin, then move 10 mm up
     logo_x = MARGIN_LEFT
     logo_y = top_y - LOGO_HEIGHT + 10 * mm
     if logo_path and logo_path.exists():
@@ -262,9 +262,9 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
     # Set the header baseline to the vertical middle of the logo
     baseline_y = logo_y + (LOGO_HEIGHT * 0.5)
 
-    # Draw only the word "INVOICE" right-aligned at this baseline
+    # Draw only the word "INVOICE" right-aligned, shifted 3 mm below the logo's vertical mid baseline
     c.setFont(bold_font, TITLE_FONT_SIZE)
-    c.drawRightString(PAGE_WIDTH - MARGIN_RIGHT, baseline_y, "INVOICE")
+    c.drawRightString(PAGE_WIDTH - MARGIN_RIGHT, baseline_y - 3 * mm, "INVOICE")
 
     # Draw a horizontal rule below the header (full width)
     line_y = top_y - HEADER_HEIGHT
@@ -506,21 +506,27 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
     cheque_to = biz.get("cheque_to", "") or settings.get("cheque_to", "") or biz.get("chequeTo", "")
     mobile = _get(data, "settings.phone", "") or _get(data, "business.phone", "")
 
-    # Footer lines in the specified order and wording
+    # Footer lines in the specified order and wording (drawn top-to-bottom)
     c.setFont(font, SMALL_FONT_SIZE)
+    lines = []
     if permit:
-        c.drawString(x, y, f"Gujarat Gov. Permit No: {permit}")
-        y += 11
+        lines.append(f"Gujarat Gov. Permit No: {permit}")
     if pan:
-        c.drawString(x, y, f"PAN No: {pan}")
-        y += 11
+        lines.append(f"PAN No: {pan}")
     if cheque_to:
-        c.drawString(x, y, "Please issue the Cheque in the Name of:")
-        y += 11
-        c.drawString(x, y, cheque_to)
-        y += 11
+        lines.append("Please issue the Cheque in the Name of:")
+        lines.append(str(cheque_to).upper())
     if mobile:
-        c.drawString(x, y, f"Mobile No: {mobile}")
+        lines.append(f"Mobile No:{mobile}")
+
+    if lines:
+        gap = 11
+        y_top = MARGIN_BOTTOM + 6 + gap * (len(lines) - 1)
+        for ln in lines:
+            c.drawString(x, y_top, ln)
+            y_top -= gap
+
+    # Left footer rendered as plain lines above
 
     # Authorized Signatory box on right
     bx = PAGE_WIDTH - MARGIN_RIGHT - SIGN_BOX_W
