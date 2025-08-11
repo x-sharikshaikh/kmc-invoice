@@ -48,8 +48,7 @@ def main() -> None:
             # no tax in new flow
             "tax_rate": 0.0,
             "logo_path": settings.logo_path,
-            # Switch between 'classic' and 'modern' to try different table designs
-            "table_style": "modern",
+            # table_style removed to use classic design
         },
         "business": {"permit": settings.permit, "pan": settings.pan, "cheque_to": settings.cheque_to},
     }
