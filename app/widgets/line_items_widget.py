@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import List, Dict, Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QLocale
+from PySide6.QtGui import QValidator
 from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
@@ -17,6 +18,124 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.currency import round_money, fmt_money
+
+
+class BlankZeroDoubleSpinBox(QDoubleSpinBox):
+    """QDoubleSpinBox that shows blank at zero, right-aligned, and avoids reversed input.
+    - Shows blank when value == minimum (0.0) using non-empty specialValueText.
+    - Forces LTR inside the editor and moves caret to end on focus for natural typing.
+    """
+
+    def __init__(self, decimals: int = 2, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setDecimals(decimals)
+        self.setMinimum(0.0)
+        self.setMaximum(1_000_000_000)
+        self.setSingleStep(1.0)
+        self.setKeyboardTracking(False)
+        self.setSpecialValueText(" ")  # non-empty to take effect
+        # Use C locale and hide group separators to avoid unexpected formatting while typing
+        try:
+            self.setLocale(QLocale.c())
+        except Exception:
+            pass
+        try:
+            self.setGroupSeparatorShown(False)
+        except Exception:
+            pass
+        # UI polish
+        try:
+            self.setButtonSymbols(getattr(QAbstractSpinBox, 'NoButtons', QAbstractSpinBox.ButtonSymbols.NoButtons))
+        except Exception:
+            pass
+        # Left align to avoid cursor jumping/reformat issues while typing
+        self.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        # Prefer numeric input on touch/keyboards
+        try:
+            self.setInputMethodHints(getattr(Qt, 'ImhDigitsOnly', 0) | getattr(Qt, 'ImhPreferNumbers', 0))
+        except Exception:
+            pass
+        # Prevent reversed insertion by forcing LTR on the line edit
+        try:
+            le = self.lineEdit()
+            if le is not None:
+                le.setLayoutDirection(Qt.LeftToRight)
+        except Exception:
+            pass
+
+    def focusInEvent(self, event) -> None:  # type: ignore[override]
+        super().focusInEvent(event)
+        try:
+            le = self.lineEdit()
+            if le is not None:
+                le.setCursorPosition(len(le.text()))
+        except Exception:
+            pass
+
+    # Stronger control over parsing/formatting to avoid mid-typing reformat and reversed digits
+    def textFromValue(self, value: float) -> str:  # type: ignore[override]
+        if value <= self.minimum() + 1e-12:
+            # Let specialValueText handle blank-at-zero
+            svt = self.specialValueText()
+            return svt if svt else ""
+        # Fixed-point formatting with set decimals, no locale grouping
+        try:
+            return f"{value:.{self.decimals()}f}"
+        except Exception:
+            return str(value)
+
+    def valueFromText(self, text: str) -> float:  # type: ignore[override]
+        s = text.strip()
+        if not s or s == self.specialValueText().strip():
+            return self.minimum()
+        # Remove any stray commas/spaces
+        s = s.replace(",", "")
+        # Normalize unicode digits to ASCII if needed
+        try:
+            # Basic conversion; invalid input falls back to min
+            return max(self.minimum(), min(self.maximum(), float(s)))
+        except Exception:
+            return self.minimum()
+
+    def validate(self, text: str, pos: int):  # type: ignore[override]
+        s = text.strip()
+        if not s:
+            return (QValidator.Intermediate, text, pos)
+        # Allow digits with optional single dot and up to 'decimals' fraction digits
+        allowed = "0123456789."
+        if any(ch not in allowed for ch in s):
+            return (QValidator.Invalid, text, pos)
+        if s.count(".") > 1:
+            return (QValidator.Invalid, text, pos)
+        if "." in s:
+            left, right = s.split(".", 1)
+            if len(right) > self.decimals():
+                return (QValidator.Invalid, text, pos)
+            if left == "":
+                # ".5" style while typing
+                return (QValidator.Intermediate, text, pos)
+        # Large integers while typing are okay
+        return (QValidator.Acceptable, text, pos)
+
+    def keyPressEvent(self, event) -> None:  # type: ignore[override]
+        # After processing the key, keep caret at end to ensure digits append naturally
+        super().keyPressEvent(event)
+        try:
+            le = self.lineEdit()
+            if le is not None:
+                le.setCursorPosition(len(le.text()))
+        except Exception:
+            pass
+
+    def stepBy(self, steps: int) -> None:  # type: ignore[override]
+        # Keep default behavior, but ensure we don't re-enable keyboard tracking glitches
+        super().stepBy(steps)
+        try:
+            le = self.lineEdit()
+            if le is not None:
+                le.setCursorPosition(len(le.text()))
+        except Exception:
+            pass
 
 
 class LineItemRow(QWidget):
@@ -49,38 +168,18 @@ class LineItemRow(QWidget):
         self.desc_edit = QLineEdit(description)
         self.desc_edit.setPlaceholderText("Description")
         self.layout.addWidget(self.desc_edit, 1)
-        # Ensure description expands
         self.layout.setStretchFactor(self.desc_edit, 1)
 
         # Qty
-        self.qty_spin = QDoubleSpinBox()
-        self.qty_spin.setDecimals(3)
-        self.qty_spin.setMinimum(0.0)            # allow 0 quantity
-        self.qty_spin.setMaximum(1_000_000_000)  # allow thousands and beyond
-        self.qty_spin.setSingleStep(1.0)
+        self.qty_spin = BlankZeroDoubleSpinBox(decimals=2)
         self.qty_spin.setValue(qty)
-        self.qty_spin.setAlignment(Qt.AlignRight)
         self.qty_spin.setFixedWidth(110)
-        # Hide up/down spinner arrows for a cleaner look
-        try:
-            self.qty_spin.setButtonSymbols(getattr(QAbstractSpinBox, 'NoButtons', QAbstractSpinBox.ButtonSymbols.NoButtons))
-        except Exception:
-            pass
         self.layout.addWidget(self.qty_spin)
+
         # Rate
-        self.rate_spin = QDoubleSpinBox()
-        self.rate_spin.setDecimals(2)
-        self.rate_spin.setMinimum(0.00)
-        self.rate_spin.setMaximum(1_000_000_000)  # allow lakhs and beyond
-        self.rate_spin.setSingleStep(1.0)
+        self.rate_spin = BlankZeroDoubleSpinBox(decimals=2)
         self.rate_spin.setValue(rate)
-        self.rate_spin.setAlignment(Qt.AlignRight)
         self.rate_spin.setFixedWidth(120)
-        # Hide up/down spinner arrows for a cleaner look
-        try:
-            self.rate_spin.setButtonSymbols(getattr(QAbstractSpinBox, 'NoButtons', QAbstractSpinBox.ButtonSymbols.NoButtons))
-        except Exception:
-            pass
         self.layout.addWidget(self.rate_spin)
 
         # Amount (right-aligned, fixed min width)
@@ -99,12 +198,12 @@ class LineItemRow(QWidget):
         self.qty_spin.valueChanged.connect(self._recalc)
         self.rate_spin.valueChanged.connect(self._recalc)
 
-        # Wrap layout inside CardRow frame
+        # Wrap the row in a CardRow frame
         frame = QFrame(self)
         frame.setObjectName("CardRow")
-        v = QVBoxLayout(frame)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.addLayout(self.layout)
+        inner = QVBoxLayout(frame)
+        inner.setContentsMargins(0, 0, 0, 0)
+        inner.addLayout(self.layout)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)

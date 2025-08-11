@@ -12,7 +12,7 @@ from typing import List, Dict, Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut
-from PySide6.QtWidgets import QApplication, QMessageBox, QDialog
+from PySide6.QtWidgets import QApplication, QMessageBox, QDialog, QFileDialog
 
 from app.ui_main import create_main_window
 from app.core.settings import load_settings, save_settings, Settings
@@ -213,15 +213,16 @@ def main() -> None:
             if hasattr(win, 'refresh_settings'):
                 win.refresh_settings(new_settings)
 
-    def on_save_pdf_and_optionally_print(do_print: bool = False):
-        # Ensure the save directory exists right away; fail fast with a clear message
-        try:
-            out_dir = _ensure_save_dir()
-            if not out_dir.exists() or not out_dir.is_dir():
-                raise OSError(str(out_dir))
-        except Exception:
-            QMessageBox.critical(win, "Cannot save", "Could not create save folder in Documents/KMC Invoices")
-            return
+    def on_save_pdf_and_optionally_print(do_print: bool = False, out_path: Path | None = None):
+        # Ensure the default save directory exists only when we are auto-picking it
+        if out_path is None:
+            try:
+                out_dir = _ensure_save_dir()
+                if not out_dir.exists() or not out_dir.is_dir():
+                    raise OSError(str(out_dir))
+            except Exception:
+                QMessageBox.critical(win, "Cannot save", "Could not create save folder in Documents/KMC Invoices")
+                return
         # Ensure settings reflect latest on-disk config
         _reload_settings_from_disk()
         logger.info("Save/Print invoked (do_print=%s)", do_print)
@@ -277,7 +278,15 @@ def main() -> None:
 
         # Build final PDF (code-drawn) directly
         inv_no = saved['invoice'].number if hasattr(saved['invoice'], 'number') else collected['invoice']['number']
-        out_final = out_dir / f"{inv_no}.pdf"
+        if out_path is not None:
+            out_final = Path(out_path)
+            try:
+                out_final.parent.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+        else:
+            out_dir = _ensure_save_dir()
+            out_final = out_dir / f"{inv_no}.pdf"
 
         # Prepare data for the code-drawn generator
         pdf_data = {
@@ -355,15 +364,68 @@ def main() -> None:
                     run(["explorer", "/select,", str(out_final)])
                 except Exception:
                     QMessageBox.information(win, "Saved", f"Invoice saved to:\n{out_final}")
+        # Show a brief status message (toast-like) in the window's status bar
+        try:
+            win.statusBar().showMessage(f"Saved: {out_final}", 4000)
+        except Exception:
+            pass
+
+    def _sanitize_filename(name: str) -> str:
+        # Replace characters invalid on Windows file systems
+        for ch in '<>:"/\\|?*':
+            name = name.replace(ch, '-')
+        return name.strip() or 'invoice'
+
+    def on_save_pdf_with_prompt():
+        # Ask user where to save the PDF, defaulting to Documents/KMC Invoices/<invoice>.pdf
+        try:
+            inv_no = getattr(win, 'inv_number', None).text().strip() if hasattr(win, 'inv_number') else 'invoice'
+        except Exception:
+            inv_no = 'invoice'
+        default_name = f"{_sanitize_filename(inv_no)}.pdf"
+        # Determine starting directory: last used, else default save dir
+        try:
+            last_dir = getattr(settings, 'last_pdf_dir', None)
+            start_dir = Path(last_dir) if last_dir else _ensure_save_dir()
+        except Exception:
+            start_dir = _ensure_save_dir()
+        initial_path = str(Path(start_dir) / default_name)
+        try:
+            sel_path, _ = QFileDialog.getSaveFileName(
+                win,
+                "Save Invoice as PDF",
+                initial_path,
+                "PDF Files (*.pdf);;All Files (*.*)",
+            )
+        except Exception:
+            sel_path = ""
+        if not sel_path:
+            return  # User canceled
+        # Ensure .pdf extension
+        p = Path(sel_path)
+        if p.suffix.lower() != ".pdf":
+            p = p.with_suffix(".pdf")
+        # Persist last used directory to settings
+        try:
+            settings.last_pdf_dir = str(p.parent)
+            save_settings(settings)
+        except Exception:
+            pass
+        on_save_pdf_and_optionally_print(False, p)
 
     win.btn_save_draft.clicked.connect(on_save_draft)
     win.btn_settings.clicked.connect(on_open_settings)
-    win.btn_save_pdf.clicked.connect(lambda: on_save_pdf_and_optionally_print(False))
+    # Save PDF should prompt the user for a location
+    win.btn_save_pdf.clicked.connect(on_save_pdf_with_prompt)
     win.btn_print.clicked.connect(lambda: on_save_pdf_and_optionally_print(True))
 
     _wire_shortcuts(win)
 
-    win.show()
+    # Start maximized by default
+    try:
+        win.showMaximized()
+    except Exception:
+        win.show()
     app.exec()
 
 

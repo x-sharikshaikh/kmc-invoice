@@ -26,6 +26,8 @@ class Settings:
 	logo_path: Optional[str] = None
 	# Optional legacy mode to use template overlay
 	use_template_overlay: bool = False
+	# Remember last used folder for "Save PDF" dialog
+	last_pdf_dir: Optional[str] = None
 
 	@classmethod
 	def from_dict(cls, data: Dict[str, Any]) -> "Settings":
