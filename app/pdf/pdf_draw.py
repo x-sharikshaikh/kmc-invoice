@@ -382,7 +382,8 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
 
     if lines:
         gap = 11
-        y_top = (MARGIN_BOTTOM - FOOTER_SHIFT) + 6 + gap * (len(lines) - 1)
+        # Move the footer text block up by 2mm
+        y_top = (MARGIN_BOTTOM - FOOTER_SHIFT) + 6 + (2 * mm) + gap * (len(lines) - 1)
         for ln in lines:
             c.drawString(x, y_top, ln)
             y_top -= gap
