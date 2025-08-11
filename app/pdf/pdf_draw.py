@@ -429,16 +429,21 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
         if not is_last_overall:
             _line(c, SL_X, y - row_h, TABLE_RIGHT, y - row_h)
 
-        # inner verticals for this row block (draw once; visually continuous across rows)
-        # left border
-        _line(c, SL_X, row_top, SL_X, y - row_h)
-        # columns splits
-        _line(c, DESC_X, row_top, DESC_X, y - row_h)
-        _line(c, QTY_X, row_top, QTY_X, y - row_h)
-        _line(c, RATE_X, row_top, RATE_X, y - row_h)
-        _line(c, AMT_X, row_top, AMT_X, y - row_h)
-        # right border
-        _line(c, TABLE_RIGHT, row_top, TABLE_RIGHT, y - row_h)
+        # Use solid black for vertical borders and splits
+        row_prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
+        row_prev_stroke = getattr(c, '_strokeColor', None)
+        c.setLineWidth(0.5)
+        c.setStrokeColor(RULE_COLOR)
+
+        # After drawing the text, draw vertical lines for this row block (left border, splits, right border)
+        for x in (SL_X, DESC_X, QTY_X, RATE_X, AMT_X, TABLE_RIGHT):
+            _line(c, x, row_top, x, y - row_h)
+
+        # Restore stroke settings before leaving the loop iteration
+        if row_prev_w is not None:
+            c.setLineWidth(row_prev_w)
+        if row_prev_stroke is not None:
+            c.setStrokeColor(row_prev_stroke)
 
         y -= row_h
         drawn += 1
