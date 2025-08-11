@@ -63,7 +63,7 @@ TABLE_RIGHT = AMT_X + AMT_W
 ROW_HEIGHT = 6 * mm
 HEADER_ROW_HEIGHT = 8 * mm
 TABLE_TOP_GAP = 4 * mm  # tighter gap to match reference layout
-TABLE_Y_SHIFT = 15 * mm  # move table upward by 15 mm (down by 5 mm from previous)
+TABLE_Y_SHIFT = 13 * mm  # move table 2 mm down from previous position
 
 TOTALS_BLOCK_HEIGHT_MIN = 10 * mm  # smaller minimum needed for single summary row
 THANK_YOU_GAP = 6 * mm
