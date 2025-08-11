@@ -18,7 +18,13 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-from app.data.repo import search_customers, export_customers_csv, import_customers_csv, delete_customer
+from app.data.repo import (
+    search_customers,
+    export_customers_csv,
+    import_customers_csv,
+    delete_customer,
+    invoices_count_for_customer,
+)
 
 
 class CustomersDialog(QDialog):
@@ -37,15 +43,15 @@ class CustomersDialog(QDialog):
         self.btn_search = QPushButton("Search")
         self.btn_export = QPushButton("Export CSV")
         self.btn_import = QPushButton("Import CSV")
-    self.btn_use = QPushButton("Use selected")
-    self.btn_delete = QPushButton("Delete")
+        self.btn_use = QPushButton("Use selected")
+        self.btn_delete = QPushButton("Delete")
         search_row.addWidget(QLabel("Search:"))
         search_row.addWidget(self.search_edit, 1)
         search_row.addWidget(self.btn_search)
         search_row.addWidget(self.btn_export)
         search_row.addWidget(self.btn_import)
-    search_row.addWidget(self.btn_use)
-    search_row.addWidget(self.btn_delete)
+        search_row.addWidget(self.btn_use)
+        search_row.addWidget(self.btn_delete)
         root.addLayout(search_row)
 
         # Results table
@@ -63,7 +69,7 @@ class CustomersDialog(QDialog):
         self.btn_use.clicked.connect(self._use_selected)
         self.btn_export.clicked.connect(self._export_csv)
         self.btn_import.clicked.connect(self._import_csv)
-    self.btn_delete.clicked.connect(self._delete_selected)
+        self.btn_delete.clicked.connect(self._delete_selected)
 
         # Initial load
         self._do_search()
@@ -154,6 +160,25 @@ class CustomersDialog(QDialog):
             else:
                 QMessageBox.information(self, "Delete Customer", "Customer not found.")
         except ValueError as e:
-            QMessageBox.warning(self, "Cannot Delete", str(e))
+            # Offer force delete when invoices exist
+            msg = str(e)
+            count = invoices_count_for_customer(int(cust.id))  # type: ignore[arg-type]
+            force_reply = QMessageBox.question(
+                self,
+                "Cannot Delete",
+                f"{msg}\n\nDelete anyway? This will permanently delete {count} invoice(s) and their items.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if force_reply == QMessageBox.Yes:
+                try:
+                    n = delete_customer(int(cust.id), force=True)  # type: ignore[arg-type]
+                    if n == 1:
+                        QMessageBox.information(self, "Force Delete", f"Deleted '{name}' and {count} invoice(s).")
+                        self._do_search()
+                    else:
+                        QMessageBox.information(self, "Delete Customer", "Customer not found.")
+                except Exception as e2:
+                    QMessageBox.warning(self, "Delete Failed", f"Could not delete:\n{e2}")
         except Exception as e:
             QMessageBox.warning(self, "Delete Failed", f"Could not delete:\n{e}")

@@ -6,7 +6,7 @@ import csv
 from pathlib import Path
 
 from sqlmodel import Session, select
-from sqlalchemy import func
+from sqlalchemy import func, delete
 from sqlalchemy.orm import selectinload
 
 from app.data.db import session_scope, get_session, create_db_and_tables
@@ -189,29 +189,47 @@ def import_customers_csv(path: str | Path) -> int:
 	return imported
 
 
-def delete_customer(customer_id: int) -> int:
-	"""Delete a customer by id if they have no invoices.
+def invoices_count_for_customer(customer_id: int) -> int:
+	"""Return number of invoices associated with a customer."""
+	with get_session() as s:
+		inv_count = s.exec(
+			select(func.count(Invoice.id)).where(Invoice.customer_id == customer_id)
+		).one()
+		try:
+			return int(inv_count)
+		except Exception:
+			return int(inv_count[0]) if isinstance(inv_count, (list, tuple)) else 0
+
+
+def delete_customer(customer_id: int, *, force: bool = False) -> int:
+	"""Delete a customer by id.
+
+	Behavior:
+	- When force is False (default): only delete if the customer has no invoices; otherwise raise ValueError.
+	- When force is True: delete the customer and ALL their invoices and items in a single transaction.
 
 	Returns 1 if deleted, 0 if not found.
-	Raises ValueError if the customer has existing invoices.
 	"""
 	with session_scope() as s:
 		cust = s.get(Customer, customer_id)
 		if not cust:
 			return 0
-		inv_count = s.exec(
-			select(func.count(Invoice.id)).where(Invoice.customer_id == customer_id)
-		).one()
-		# one() returns a scalar for count in SQLModel/SQLAlchemy 2 style
-		try:
-			count_val = int(inv_count)
-		except Exception:
-			# Fallback for certain SQLModel versions returning tuple
-			count_val = int(inv_count[0]) if isinstance(inv_count, (list, tuple)) else 0
-		if count_val > 0:
-			raise ValueError(f"Cannot delete: customer has {count_val} invoice(s).")
+
+		# Collect invoice ids for this customer
+		inv_ids = [
+			row[0]
+			for row in s.exec(select(Invoice.id).where(Invoice.customer_id == customer_id)).all()
+		]
+
+		if inv_ids and not force:
+			raise ValueError(f"Cannot delete: customer has {len(inv_ids)} invoice(s).")
+
+		# If forcing, remove dependent records first to keep integrity on all SQLite versions
+		if inv_ids:
+			s.exec(delete(Item).where(Item.invoice_id.in_(inv_ids)))
+			s.exec(delete(Invoice).where(Invoice.id.in_(inv_ids)))
+
 		s.delete(cust)
-		# flush to ensure deletion is executed before leaving context
 		s.flush()
 		return 1
 

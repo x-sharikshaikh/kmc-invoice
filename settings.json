@@ -8,5 +8,6 @@
   "thank_you": "Thank you for choosing KMC!",
   "invoice_prefix": "KMC-",
   "logo_path": "assets/logo.png",
-  "use_template_overlay": false
+  "use_template_overlay": false,
+  "last_pdf_dir": "C:\\Users\\mahir\\Downloads"
 }
