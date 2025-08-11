@@ -506,21 +506,21 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
     cheque_to = biz.get("cheque_to", "") or settings.get("cheque_to", "") or biz.get("chequeTo", "")
     mobile = _get(data, "settings.phone", "") or _get(data, "business.phone", "")
 
-    # Footer lines in the annotated image order
+    # Footer lines in the specified order and wording
     c.setFont(font, SMALL_FONT_SIZE)
-    if mobile:
-        c.drawString(x, y, f"Mobile No: {mobile}")
-        y += 11
-    if cheque_to:
-        c.drawString(x, y, cheque_to)
-        y += 11
-        c.drawString(x, y, "Please issue the Cheque in the Name of:")
+    if permit:
+        c.drawString(x, y, f"Gujarat Gov. Permit No: {permit}")
         y += 11
     if pan:
         c.drawString(x, y, f"PAN No: {pan}")
         y += 11
-    if permit:
-        c.drawString(x, y, f"Gujarat Gov. Permit No: {permit}")
+    if cheque_to:
+        c.drawString(x, y, "Please issue the Cheque in the Name of:")
+        y += 11
+        c.drawString(x, y, cheque_to)
+        y += 11
+    if mobile:
+        c.drawString(x, y, f"Mobile No: {mobile}")
 
     # Authorized Signatory box on right
     bx = PAGE_WIDTH - MARGIN_RIGHT - SIGN_BOX_W
