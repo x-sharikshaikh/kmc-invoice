@@ -74,6 +74,11 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
 
+        # Reset to defaults button
+        self.btn_reset = QPushButton("Reset to Defaults")
+        self.btn_reset.clicked.connect(self._reset_defaults)
+        root.addWidget(self.btn_reset)
+
     def _browse_logo(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -140,3 +145,16 @@ class SettingsDialog(QDialog):
             invoice_prefix=self.ed_prefix.text().strip() or self._orig.invoice_prefix,
             logo_path=(self.ed_logo.text().strip() or None),
         )
+
+    def _reset_defaults(self) -> None:
+        """Reset UI fields to default Settings (does not auto-save)."""
+        s = Settings()
+        self.ed_business.setText(s.business_name)
+        self.ed_owner.setText(s.owner)
+        self.ed_phone.setText(s.phone)
+        self.ed_permit.setText(s.permit)
+        self.ed_pan.setText(s.pan)
+        self.ed_cheque_to.setText(s.cheque_to)
+        self.ed_thank_you.setText(s.thank_you)
+        self.ed_prefix.setText(s.invoice_prefix)
+        self.ed_logo.setText(s.logo_path or "")

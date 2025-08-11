@@ -6,11 +6,11 @@ from contextlib import contextmanager
 
 from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy import text, MetaData
+from app.core.paths import user_writable_dir
 
 
-# Project root (…/kmc-invoice)
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = PROJECT_ROOT / "kmc.db"
+# Database lives in a user-writable directory (next to the EXE when packaged; project root in dev)
+DB_PATH = user_writable_dir() / "kmc.db"
 
 _ENGINE = None
 

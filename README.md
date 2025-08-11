@@ -49,6 +49,9 @@ Legacy template option (optional):
   ```
 
 PDFs are saved to `~/Documents/KMC Invoices`.
+The SQLite database `kmc.db` and `settings.json` are stored in a user‑writable folder:
+  - Packaged EXE: next to `KMC Invoice.exe`
+  - Dev runs: project root (`kmc-invoice/`)
 
 ### Printing
 
@@ -85,6 +88,7 @@ Two options:
 - Template PDF is no longer required; invoices are fully code-drawn via ReportLab. No `template.pdf` needs to be bundled.
 - Assets (logo.png, fonts) are bundled under `assets/`.
 - `settings.json` is placed next to the EXE on first run if missing. You can edit it there.
+- The database file `kmc.db` is kept alongside `settings.json` for portability.
 - At runtime the app resolves resources using PyInstaller's _MEIPASS or project root in dev.
 
 ## QA Checklist

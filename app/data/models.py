@@ -6,6 +6,7 @@ from typing import Optional, List
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy.orm import relationship
 from sqlalchemy import event
+from app.core.currency import round_money
 
 
 class Customer(SQLModel, table=True):
@@ -50,7 +51,7 @@ def _compute_item_amount(mapper, connection, target: Item):  # type: ignore[no-r
 	try:
 		q = float(target.qty or 0)
 		r = float(target.rate or 0)
-		target.amount = q * r
+		target.amount = round_money(q * r)
 	except Exception:
 		target.amount = 0.0
 

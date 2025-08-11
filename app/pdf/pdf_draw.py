@@ -355,11 +355,11 @@ def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> fl
     c.setLineWidth(0.3)
     c.setStrokeColor(GRID_COLOR)
     for x in (DESC_X, QTY_X, RATE_X, AMT_X):
-        _line(c, x, y_top, x, y)
+        _line(c, x, y_top, x, y_body_start)
     # Right outer border in black
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(0.7)
-    _line(c, TABLE_RIGHT, y_top, TABLE_RIGHT, y)
+    _line(c, TABLE_RIGHT, y_top, TABLE_RIGHT, y_body_start)
     # Restore previous stroke settings
     if prev_w is not None:
         c.setLineWidth(prev_w)
@@ -415,7 +415,7 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
     # left/right verticals per row block
     # draw text
         row_top = y
-        # Serial aligned to row baseline with trailing dot (matches reference)
+                # Serial aligned to row baseline with trailing dot (matches reference)
         c.drawString(SL_X + 2, y - row_h + 2, f"{idx}.")
         # Description multi-line
         ty = y - ROW_HEIGHT + 2
@@ -426,6 +426,7 @@ def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y:
         baseline_y = y - row_h + 2
         c.drawRightString(QTY_X + QTY_W - 2, baseline_y, _fmt_qty(qty))
         c.drawRightString(RATE_X + RATE_W - 2, baseline_y, fmt_money(rate))
+        c.drawRightString(AMT_X + AMT_W - 2, baseline_y, fmt_money(amount))
         prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
         prev_stroke = getattr(c, '_strokeColor', None)
         c.setLineWidth(0.3)

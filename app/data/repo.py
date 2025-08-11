@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.data.db import session_scope, get_session, create_db_and_tables
 from app.data.models import Customer, Invoice, Item
+from app.core.currency import round_money
 
 
 def get_or_create_customer(name: str, phone: Optional[str] = None, address: Optional[str] = None) -> Customer:
@@ -74,6 +75,7 @@ def create_invoice(invoice_dto: Dict[str, Any]) -> Invoice:
 			q = float(item.get("qty", 0) or 0)
 			r = float(item.get("rate", 0) or 0)
 			total_val += q * r
+		total_val = round_money(total_val)
 
 		inv = Invoice(
 			number=str(number),
@@ -101,30 +103,19 @@ def create_invoice(invoice_dto: Dict[str, Any]) -> Invoice:
 
 
 def list_invoices(limit: Optional[int] = None) -> List[Invoice]:
-	"""Return invoices ordered by date DESC, id DESC, with customer eagerly loaded."""
-	with get_session() as s:
-		stmt = (
-			select(Invoice)
-			.options(selectinload(Invoice.customer))
-			.order_by(Invoice.date.desc(), Invoice.id.desc())
-		)
-		if isinstance(limit, int) and limit > 0:
-			stmt = stmt.limit(limit)
-		return list(s.exec(stmt).all())
+    """Return invoices ordered by date DESC, id DESC."""
+    with get_session() as s:
+        stmt = select(Invoice).order_by(Invoice.date.desc(), Invoice.id.desc())
+        if isinstance(limit, int) and limit > 0:
+            stmt = stmt.limit(limit)
+        return list(s.exec(stmt).all())
 
 
 def get_invoice_by_number(number: str) -> Optional[Invoice]:
-	"""Fetch a single invoice by its unique number, including items and customer."""
-	with get_session() as s:
-		stmt = (
-			select(Invoice)
-			.where(Invoice.number == number)
-			.options(
-				selectinload(Invoice.customer),
-				selectinload(Invoice.items),
-			)
-		)
-		return s.exec(stmt).first()
+    """Fetch a single invoice by its unique number."""
+    with get_session() as s:
+        stmt = select(Invoice).where(Invoice.number == number)
+        return s.exec(stmt).first()
 
 
 def search_customers(query: str = "", limit: int = 50) -> List[Customer]:

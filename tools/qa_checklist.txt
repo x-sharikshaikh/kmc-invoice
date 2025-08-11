@@ -6,6 +6,9 @@ Prereqs
 - Windows 11 test machine (one dev machine, one clean machine for EXE test)
 - Python environment with project dependencies installed (for dev run)
 - Optional: default PDF viewer installed (Edge/Adobe)
+- Note: Database (`kmc.db`) and `settings.json` live in a user-writable folder
+  - Packaged: next to KMC Invoice.exe
+  - Dev: project root
 
 A. Basic run
 1) Launch app (dev):
@@ -73,6 +76,7 @@ E. Packaged EXE (clean Windows 11)
 2) Copy dist/KMC Invoice/ to a clean Windows 11 machine
 3) First run:
    - Launch KMC Invoice.exe; settings.json should appear beside EXE if missing
+   - Verify kmc.db is also created next to the EXE after first Save
    - Add 3–5 items, Save PDF, open/print
    - Verify logo/fonts load if assets folder is present
 4) Repeat pagination checks (6/15 rows) quickly to spot regressions
