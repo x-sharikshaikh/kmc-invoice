@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date as _date
+from datetime import datetime
 from pathlib import Path
 import sys
 
@@ -64,8 +65,15 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_pdf = out_dir / "SAMPLE_CODE_DRAWN.pdf"
 
-    build_invoice_pdf(out_pdf, data)
-    print(f"Wrote sample to: {out_pdf}")
+    try:
+        build_invoice_pdf(out_pdf, data)
+        print(f"Wrote sample to: {out_pdf}")
+    except PermissionError:
+        # If the file is open/locked, write to a timestamped file instead
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        alt_pdf = out_dir / f"SAMPLE_CODE_DRAWN-{ts}.pdf"
+        build_invoice_pdf(alt_pdf, data)
+        print(f"Wrote sample to: {alt_pdf}")
 
 
 if __name__ == "__main__":

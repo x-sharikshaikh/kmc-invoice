@@ -63,6 +63,7 @@ TABLE_RIGHT = AMT_X + AMT_W
 ROW_HEIGHT = 6 * mm
 HEADER_ROW_HEIGHT = 8 * mm
 TABLE_TOP_GAP = 4 * mm  # tighter gap to match reference layout
+TABLE_Y_SHIFT = 15 * mm  # move table upward by 15 mm (down by 5 mm from previous)
 
 TOTALS_BLOCK_HEIGHT_MIN = 10 * mm  # smaller minimum needed for single summary row
 THANK_YOU_GAP = 6 * mm
@@ -74,6 +75,10 @@ ROW_BOTTOM_GAP = 4 * mm  # minimal bottom gap beyond page margin
 TEXT_COLOR = colors.black
 RULE_COLOR = colors.black           # for outer borders, header rules, totals box
 GRID_COLOR = colors.Color(0.6, 0.6, 0.6)  # medium gray for internal grid lines
+
+# Footer shifts
+FOOTER_SHIFT = 10 * mm            # move left footer text block up by 5 mm (from 15 to 10)
+SIGN_BOX_EXTRA_SHIFT = 0 * mm     # move signatory box up by 5 mm (remove extra shift)
 
 
 # ===== Helpers =====
@@ -284,11 +289,19 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
 
 
 def _draw_invoice_block(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> float:
-    # Feature removed: do not draw Invoice No or Date on the right.
-    # Maintain previous vertical spacing so the table alignment with BILL TO remains unchanged.
-    # Previously, this block consumed approximately 12.2 mm in height.
-    y = y_top - (6 * mm + 4.2 * mm + 2 * mm)
-    return y
+    inv = data.get("invoice", {}) or {}
+    number = inv.get("number", "")
+    date_val = _fmt_date(inv.get("date"))
+
+    # Nudge a bit left from the right margin to avoid any viewer edge clipping
+    right_x = PAGE_WIDTH - MARGIN_RIGHT - 2 * mm
+    # Align with BILL TO’s first line (6 mm below the header line)
+    y = y_top - 6 * mm
+    c.setFont(font, LABEL_FONT_SIZE)
+    c.drawRightString(right_x, y, f"Invoice No: {number}")
+    y -= 4.2 * mm
+    c.drawRightString(right_x, y, f"Date: {date_val}")
+    return y - 2 * mm
 
 
 def _draw_bill_to(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> float:
@@ -344,7 +357,8 @@ def _draw_summary(c: Canvas, font: str, bold_font: str, data: dict, y: float) ->
 
 
 def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
-    y = MARGIN_BOTTOM + 6
+    # Footer text block shifted by FOOTER_SHIFT; signatory box gets additional shift
+    y = (MARGIN_BOTTOM - FOOTER_SHIFT) + 6
     x = MARGIN_LEFT
     biz = data.get("business", {}) if isinstance(data.get("business"), dict) else {}
     settings = data.get("settings", {}) if isinstance(data.get("settings"), dict) else {}
@@ -368,7 +382,7 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
 
     if lines:
         gap = 11
-        y_top = MARGIN_BOTTOM + 6 + gap * (len(lines) - 1)
+        y_top = (MARGIN_BOTTOM - FOOTER_SHIFT) + 6 + gap * (len(lines) - 1)
         for ln in lines:
             c.drawString(x, y_top, ln)
             y_top -= gap
@@ -377,7 +391,7 @@ def _draw_footer(c: Canvas, font: str, data: Dict[str, Any]) -> None:
 
     # Authorized Signatory box on right
     bx = PAGE_WIDTH - MARGIN_RIGHT - SIGN_BOX_W
-    by = MARGIN_BOTTOM
+    by = MARGIN_BOTTOM - FOOTER_SHIFT - SIGN_BOX_EXTRA_SHIFT
     prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
@@ -430,8 +444,8 @@ def _draw_table_with_platypus(c: Canvas, items: List[Dict[str, Any]], y_start: f
 
     # Build the table flowable
     # Compute filler height so the table bottom aligns just above the footer area
-    # Reserve a small gap above footer for aesthetics
-    footer_top = MARGIN_BOTTOM + SIGN_BOX_H + 8
+    # Reserve a small gap above footer for aesthetics. Footer and sign box have shifts applied.
+    footer_top = (MARGIN_BOTTOM - FOOTER_SHIFT - SIGN_BOX_EXTRA_SHIFT) + SIGN_BOX_H + 8
     available_height = max(0.0, (y_start - footer_top))
 
     # First, estimate height of the table without filler to see how much space remains
@@ -489,7 +503,7 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
         y_after_header = _draw_header(c, font, bold_font, data, first_page)
         info_y = _draw_invoice_block(c, font, data, y_after_header)
         bill_y = _draw_bill_to(c, font, data, y_after_header)
-        table_start_y = min(info_y, bill_y) - TABLE_TOP_GAP
+        table_start_y = min(info_y, bill_y) - TABLE_TOP_GAP + TABLE_Y_SHIFT
         return _draw_table_header(c, font, bold_font, table_start_y)
 
     y = new_page(first_page=True)
@@ -516,12 +530,8 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
             c.showPage()
             y = new_page(first_page=False)
         else:
-            # Last page: ensure there is room for totals; if not, move to fresh page
-            need = TOTALS_BLOCK_HEIGHT_MIN
-            if (y - need) < MARGIN_BOTTOM:
-                c.showPage()
-                y = new_page(first_page=False)
-            # Table already includes totals, just draw footer
+            # Last page: totals are already included within the table.
+            # Draw footer directly without forcing a page break.
             _draw_footer(c, font, data)
 
     c.save()
