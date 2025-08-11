@@ -294,7 +294,8 @@ def _draw_invoice_block(c: Canvas, font: str, data: Dict[str, Any], y_top: float
     date_val = _fmt_date(inv.get("date"))
 
     # Two-column right-aligned block (labels and values), matching reference alignment
-    value_right_x = PAGE_WIDTH - MARGIN_RIGHT - 2 * mm  # slight inset from right edge
+    # Shift 2mm to the right (remove previous 2mm inset)
+    value_right_x = PAGE_WIDTH - MARGIN_RIGHT
     label_right_x = value_right_x - (32 * mm)           # label column to the left
     # Align with BILL TO’s first line (6 mm below the header line)
     y = y_top - 6 * mm
