@@ -205,10 +205,9 @@ def _line(canvas: Canvas, x1: float, y1: float, x2: float, y2: float) -> None:
 
 def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], first_page: bool) -> float:
     """
-    Draw the invoice header exactly like the desired template:
-    - Logo flush to the top margin
-    - Owner & phone on a single baseline aligned with INVOICE
-    - INVOICE right‑aligned on the same baseline
+    Draw the invoice header with:
+    - Logo flush to the top margin on the left
+    - Only the word "INVOICE" on the right, aligned to the logo's vertical centre baseline
     A thin rule is drawn below the header. Returns the y coordinate below the header.
     """
     top_y = PAGE_HEIGHT - MARGIN_TOP
@@ -252,31 +251,17 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
         except Exception:
             pass
 
-    # Define baseline for owner/phone and INVOICE relative to top margin.
-    # Baseline: 55% down from the top of the logo (aligns owner with logo visually).
-    baseline_y = top_y - (LOGO_HEIGHT * 0.55)
+    # Compute baseline at the vertical centre of the logo (50% of logo height)
+    baseline_y = top_y - (LOGO_HEIGHT * 0.5)
 
-    # Compute X positions
-    owner_x = MARGIN_LEFT + LOGO_WIDTH + 6  # start of owner text
+    # Compute X position for the title
     title_x = PAGE_WIDTH - MARGIN_RIGHT     # right‑aligned for "INVOICE"
 
-    # Owner and phone (left‑aligned)
-    try:
-        owner = _get(data, "settings.owner", None) or _get(data, "business.owner", None) or ""
-        phone = _get(data, "settings.phone", None) or _get(data, "business.phone", None) or ""
-        if owner:
-            c.setFont(bold_font, OWNER_FONT_SIZE)
-            c.drawString(owner_x, baseline_y, str(owner))
-        if phone:
-            c.setFont(font, PHONE_FONT_SIZE)
-            # Draw the phone number 4 mm below the owner text (same spacing as the template).
-            c.drawString(owner_x, baseline_y - 4 * mm, f"Mobile No:{phone}")
-    except Exception:
-        pass
+    # No owner/phone text in header
 
-    # “INVOICE” label: raise it by 1 mm to align visually with the owner baseline.
+    # "INVOICE" label on the baseline
     c.setFont(bold_font, TITLE_FONT_SIZE)
-    c.drawRightString(title_x, baseline_y + 1 * mm, "INVOICE")
+    c.drawRightString(title_x, baseline_y, "INVOICE")
 
     # Draw a horizontal rule below the header (full width)
     line_y = top_y - HEADER_HEIGHT
