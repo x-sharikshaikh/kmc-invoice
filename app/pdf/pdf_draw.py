@@ -21,14 +21,14 @@ PAGE_WIDTH, PAGE_HEIGHT = PAGE_SIZE
 # Margins
 MARGIN_LEFT = 15 * mm
 MARGIN_RIGHT = 15 * mm
-MARGIN_TOP = 18 * mm
-MARGIN_BOTTOM = 18 * mm
+MARGIN_TOP = 15 * mm
+MARGIN_BOTTOM = 15 * mm
 
 # Header
-HEADER_HEIGHT = 32 * mm
+HEADER_HEIGHT = 20 * mm 
 LOGO_WIDTH = 36 * mm
 LOGO_HEIGHT = 24 * mm
-TITLE_FONT_SIZE = 22
+TITLE_FONT_SIZE = 25
 # Typography ratios for alignment
 # - Approximate ascent fraction of font size above baseline (Helvetica/NotoSans)
 TITLE_ASCENT_RATIO = 0.72
@@ -36,7 +36,7 @@ TITLE_ASCENT_RATIO = 0.72
 TITLE_CAP_RATIO = 0.70
 
 # - Target proportion: make the INVOICE text height match the logo height for visual parity
-TITLE_TO_LOGO_RATIO = 0.85
+TITLE_TO_LOGO_RATIO = 0.30
 LABEL_FONT_SIZE = 10
 TEXT_FONT_SIZE = 10
 SMALL_FONT_SIZE = 9
