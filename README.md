@@ -1,93 +1,113 @@
-# KMC Invoice App
+# KMC Invoice (Windows)
 
-Offline invoice app targeting Windows, built with PySide6, ReportLab, SQLModel/SQLite, and PyInstaller.
+Offline Windows invoicing app built with PySide6 (Qt), ReportLab (PDF), SQLModel/SQLite, and PyInstaller.
 
-While the app is geared toward Windows, the Python package can be installed and executed on other platforms for development or testing. PowerShell commands below have POSIX equivalents.
+While the app targets Windows for packaging and printing, you can run it on other platforms for development/testing. PowerShell commands below have POSIX equivalents.
 
-- App code: `app/`
-- Assets: `assets/` (add your `logo.png` and optional `fonts/`)
-- Settings: `settings.json`
+- Code: `app/`
+- Assets: `assets/` (optional `logo.png`, optional `fonts/`)
+- Runtime config: `settings.json`
 
-## Assets
+## What it does
 
-- Invoices are generated fully in code using ReportLab. An external `template.pdf` is not required.
-- Optional branding assets:
-  - `assets/logo.png` (optional; used if present)
-  - `assets/fonts/` (optional; add fonts like Noto Sans; falls back to built-in fonts if missing)
-- If the logo or fonts are missing, PDF generation still works and uses defaults.
+- Create invoices and save them to a local SQLite database (no Internet required).
+- Generate high-quality, code‑drawn PDFs (no overlay/template files).
+- Auto-increment invoice numbers with a configurable prefix (e.g., `KMC-`).
+- Manage customers (search, import/export CSV, select). Delete safely or force delete with cascade.
+- Print using the system’s default PDF handler (Windows).
 
-## Install & Run
+## Install and run (PowerShell)
 
-Commands below use PowerShell syntax; on macOS/Linux, replace the activation command with `source .venv/bin/activate`.
-
-1. Optional: create and activate a virtual environment
-
-    ```powershell
-    python -m venv .venv
-    . .venv\Scripts\Activate.ps1
-    ```
-
-2. Install the package (installs dependencies):
-
-    ```powershell
-    pip install -e .
-    ```
-
-3. Launch the app:
-
-    ```powershell
-    python -m app.main
-    ```
-
-PDFs are saved to `~/Documents/KMC Invoices`.
-The SQLite database `kmc.db` and `settings.json` are stored in a user‑writable folder:
-  - Packaged EXE: next to `KMC Invoice.exe`
-  - Dev runs: project root (`kmc-invoice/`)
-
-### Printing
-
-- Use the Print button to send the generated PDF to your default Windows PDF viewer/printer.
-- Ensure a default PDF app (e.g., Edge, Adobe Reader) is installed and associated with .pdf files.
-- You can also open the saved PDF from `~/Documents/KMC Invoices` and print manually.
-
-## Screenshots / Samples
-
-- App screenshot (add your own): `assets/samples/screenshot.png`
-- Redacted sample PDF: `assets/samples/sample-redacted.pdf`
-
-Generate the sample PDF:
+1) Create/activate a virtual environment (recommended)
 
 ```powershell
-python tools/make_sample_pdf_drawn.py
+python -m venv .venv
+. .venv\Scripts\Activate.ps1
 ```
+
+2) Install dependencies
+
+```powershell
+pip install -r requirements.txt
+```
+
+3) Launch the app
+
+```powershell
+python -m app.main    # recommended (runs as a module)
+# or
+python app/main.py
+```
+
+PDFs default to `~/Documents/KMC Invoices` unless you choose a location in the Save dialog.
+
+Data files (`kmc.db`, `settings.json`) live in a user‑writable folder:
+- Packaged EXE: next to `KMC Invoice.exe`
+- Dev runs: project root (`kmc-invoice/`)
+
+## Settings and assets
+
+- `settings.json` stores your business name, owner, phone, PAN/permit, invoice prefix, etc.
+- Optional branding:
+  - `assets/logo.png` (used if present)
+  - `assets/fonts/` (e.g., `NotoSans-Regular.ttf`, `NotoSans-Bold.ttf`); falls back to Helvetica if missing
+
+## Keyboard shortcuts
+
+- Enter/Return: Add an item row (when focus is within the items widget)
+- Delete: Remove the currently focused item row
+- Tab order flows through Bill To → first item description
+
+## Customers: safe and force delete
+
+- Delete attempts are safe by default and will warn if invoices exist.
+- Click “Delete anyway?” to force delete a customer and cascade delete all their invoices and items.
+
+## Printing (Windows)
+
+- Uses `os.startfile(path, "print")` to send the PDF to your default PDF app/printer.
+- If automatic printing fails, the app opens the PDF so you can print from your viewer.
+
+## Tests
+
+Run tests (requires dependencies):
+
+```powershell
+python -m pytest -q
+```
+
+The PDF test (`tests/test_invoice_pdf.py`) checks that the generated PDF is A4 sized and contains key text like `Date: …` and `Total:` values.
+
+## Developer utilities
+
+- `tools/smoke_test.py` — quick DB and invoice creation sanity check.
+- `tools/test_invoice_table.py`, `tools/verify_table_styling.py` — layout verification helpers.
 
 ## Build a Windows EXE
 
-Two options:
+Quick build:
 
-- Quick command (PowerShell):
-  - Ensure dependencies are installed: `pip install -r requirements.txt`
-  - Build:
+```powershell
+pyinstaller --noconfirm --clean ^
+  --name "KMC Invoice" --noconsole ^
+  --hidden-import sqlalchemy --hidden-import pydantic ^
+  --add-data "assets;assets" --add-data "settings.json;." ^
+  app/main.py
+```
 
-    ```powershell
-    pyinstaller --noconfirm --clean --name "KMC Invoice" --noconsole `
-        --hidden-import sqlalchemy --hidden-import pydantic `
-        --add-data "assets;assets" --add-data "settings.json;." app/main.py
-    ```
-  - Output: `dist/KMC Invoice/KMC Invoice.exe`
+Or with the provided spec: `pyinstaller tools/build.spec`
 
-- With spec file:
-  - `pyinstaller tools/build.spec`
-    - The spec bundles `assets/` (logo/fonts) and `settings.json` only; no `template.pdf` is included.
+Notes:
+- No template/overlay files are required; invoices are fully code‑drawn (the legacy overlay code has been removed).
+- Assets (logo, fonts) and `settings.json` are bundled by the spec.
+- At runtime, resources resolve via PyInstaller’s `_MEIPASS` (bundled) or the project root (dev).
 
-### Notes
+## Troubleshooting
 
-- Template PDF is no longer required; invoices are fully code-drawn via ReportLab. No `template.pdf` needs to be bundled.
-- Assets (logo.png, fonts) are bundled under `assets/`.
-- `settings.json` is placed next to the EXE on first run if missing. You can edit it there.
-- The database file `kmc.db` is kept alongside `settings.json` for portability.
-- At runtime the app resolves resources using PyInstaller's _MEIPASS or project root in dev.
+- PowerShell won’t activate venv: run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once in an elevated PowerShell.
+- Missing PySide6 or other modules: run `pip install -r requirements.txt` inside the venv.
+- Printing doesn’t work: ensure a default PDF app is installed and associated with `.pdf`.
 
-## QA Checklist
+## License
 
-See `tools/qa_checklist.txt` for end-to-end steps to verify pagination, formatting, printing, and packaged EXE behavior.
+Private project. All rights reserved.
