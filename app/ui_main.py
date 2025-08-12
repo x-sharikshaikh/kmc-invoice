@@ -223,6 +223,7 @@ class MainWindow(QMainWindow):
         self.btn_save_draft = QPushButton("Save Draft")
         self.btn_settings = QPushButton("Settings")
         self.btn_customers = QPushButton("Customers")
+        self.btn_drafts = QPushButton("Saved Drafts")
         # Theme toggle (QDarkStyle)
         self.btn_theme = QPushButton("Dark Mode")
         self.btn_theme.setCheckable(True)
@@ -234,6 +235,7 @@ class MainWindow(QMainWindow):
             self.btn_save_draft,
             self.btn_settings,
             self.btn_customers,
+            self.btn_drafts,
             self.btn_theme,
         ):
             footer.addWidget(b)
@@ -245,6 +247,7 @@ class MainWindow(QMainWindow):
         add_btn.clicked.connect(lambda: self.items.add_row())
         self.btn_new_invoice.clicked.connect(self.new_invoice)
         self.btn_customers.clicked.connect(self.open_customers)
+        self.btn_drafts.clicked.connect(self.open_drafts)
 
         # Style (light theme by default)
         self.apply_styles()
@@ -306,6 +309,73 @@ class MainWindow(QMainWindow):
                 self.name_edit.setText(getattr(cust, 'name', '') or "")
                 self.phone_edit.setText(getattr(cust, 'phone', '') or "")
                 self.addr_edit.setPlainText(getattr(cust, 'address', '') or "")
+            except Exception:
+                pass
+
+    def open_drafts(self) -> None:
+        """Open the Saved Drafts dialog and load the selected invoice into the form."""
+        from PySide6.QtWidgets import QMessageBox
+        try:
+            from app.widgets.drafts_dialog import DraftsDialog
+            from app.data.repo import get_invoice_with_items
+        except Exception as e:
+            try:
+                QMessageBox.warning(self, "Saved Drafts", f"Could not open drafts dialog.\n\nDetails: {e}")
+            except Exception:
+                pass
+            return
+        try:
+            dlg = DraftsDialog(self)
+            if dlg.exec() == QDialog.Accepted and getattr(dlg, 'selected_invoice_id', None):
+                inv_id = int(getattr(dlg, 'selected_invoice_id'))
+                data = get_invoice_with_items(inv_id)
+                if not data:
+                    return
+                # Populate BILL TO
+                cust = data.get('customer') or {}
+                try:
+                    self.name_edit.setText(str(cust.get('name') or ""))
+                    self.phone_edit.setText(str(cust.get('phone') or ""))
+                    self.addr_edit.setPlainText(str(cust.get('address') or ""))
+                except Exception:
+                    pass
+                # Invoice basics
+                inv = data.get('invoice') or {}
+                try:
+                    self.inv_number.setText(str(inv.get('number') or ""))
+                except Exception:
+                    pass
+                # Date
+                try:
+                    d = inv.get('date')
+                    if isinstance(d, _date):
+                        self.date_edit.setDate(QDate(d.year, d.month, d.day))
+                except Exception:
+                    pass
+                # Items
+                try:
+                    # Clear rows
+                    while self.items.vbox.count():
+                        w = self.items.vbox.itemAt(0).widget()
+                        if w:
+                            self.items.remove_row(w)
+                    loaded = False
+                    for it in (data.get('items') or []):
+                        self.items.add_row(
+                            description=str(it.get('description') or ""),
+                            qty=float(it.get('qty') or 0.0),
+                            rate=float(it.get('rate') or 0.0),
+                        )
+                        loaded = True
+                    if not loaded:
+                        # Keep one empty row to start with
+                        self.items.add_row()
+                    self._recalc_total()
+                except Exception:
+                    pass
+        except Exception as e:
+            try:
+                QMessageBox.warning(self, "Saved Drafts", f"An error occurred.\n\nDetails: {e}")
             except Exception:
                 pass
 
@@ -582,4 +652,10 @@ class MainWindow(QMainWindow):
 
 def create_main_window() -> QMainWindow:
     return MainWindow()
+
+    
+    
+
+    
+    
 

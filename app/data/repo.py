@@ -118,6 +118,96 @@ def get_invoice_by_number(number: str) -> Optional[Invoice]:
         return s.exec(stmt).first()
 
 
+def list_invoices_full(query: str = "", limit: int = 200) -> List[Dict[str, Any]]:
+	"""List recent invoices with customer and totals for UI listing.
+
+	Returns list of dicts: {id, number, date, customer_name, customer_phone, total}
+	Applies case-insensitive filtering on invoice number and customer name when query provided.
+	"""
+	q = (query or "").strip().lower()
+	with get_session() as s:
+		# Select explicit columns for robust cross-version compatibility
+		stmt = (
+			select(
+				Invoice.id,
+				Invoice.number,
+				Invoice.date,
+				Invoice.total,
+				Customer.name.label("customer_name"),
+				Customer.phone.label("customer_phone"),
+			)
+			.select_from(Invoice)
+			.join(Customer, Customer.id == Invoice.customer_id, isouter=True)
+			.order_by(Invoice.date.desc(), Invoice.id.desc())
+		)
+		if q:
+			like = f"%{q}%"
+			stmt = stmt.where(
+				(func.lower(Invoice.number).like(like))
+				| (func.lower(Customer.name).like(like))
+			)
+		if limit and isinstance(limit, int):
+			stmt = stmt.limit(limit)
+		rows = list(s.exec(stmt).all())
+		out: List[Dict[str, Any]] = []
+		for r in rows:
+			try:
+				inv_id, number, d, total, cust_name, cust_phone = r
+			except Exception:
+				# Fallback if row is a dict-like
+				inv_id = r[0]; number = r[1]; d = r[2]; total = r[3]; cust_name = r[4] if len(r) > 4 else None; cust_phone = r[5] if len(r) > 5 else None
+			out.append({
+				"id": int(inv_id),
+				"number": str(number),
+				"date": d,
+				"customer_name": cust_name,
+				"customer_phone": cust_phone,
+				"total": float(total or 0.0),
+			})
+		return out
+
+
+def get_invoice_with_items(invoice_id: int) -> Optional[Dict[str, Any]]:
+	"""Fetch a single invoice with its customer and items, as plain dicts for the UI.
+
+	Returns None if not found, else a dict with keys:
+	  invoice: {id, number, date, total, notes}
+	  customer: {id, name, phone, address}
+	  items: [{description, qty, rate, amount}]
+	"""
+	with get_session() as s:
+		inv = s.get(Invoice, invoice_id)
+		if not inv:
+			return None
+		cust = s.get(Customer, getattr(inv, "customer_id", None)) if getattr(inv, "customer_id", None) is not None else None
+		item_rows = s.exec(select(Item).where(Item.invoice_id == inv.id).order_by(Item.id.asc())).all()
+		items = [
+			{
+				"description": getattr(it, "description", ""),
+				"qty": float(getattr(it, "qty", 0.0) or 0.0),
+				"rate": float(getattr(it, "rate", 0.0) or 0.0),
+				"amount": float(getattr(it, "amount", (getattr(it, "qty", 0.0) or 0.0) * (getattr(it, "rate", 0.0) or 0.0))),
+			}
+			for it in (item_rows or [])
+		]
+		return {
+			"invoice": {
+				"id": inv.id,
+				"number": inv.number,
+				"date": inv.date,
+				"total": float(getattr(inv, "total", 0.0) or 0.0),
+				"notes": getattr(inv, "notes", None),
+			},
+			"customer": {
+				"id": getattr(cust, "id", None) if cust else None,
+				"name": getattr(cust, "name", None) if cust else None,
+				"phone": getattr(cust, "phone", None) if cust else None,
+				"address": getattr(cust, "address", None) if cust else None,
+			},
+			"items": items,
+		}
+
+
 def search_customers(query: str = "", limit: int = 50) -> List[Customer]:
 	"""Search customers by name, phone, or address (case-insensitive). Returns up to limit results.
 
@@ -240,6 +330,19 @@ def delete_customer(customer_id: int, *, force: bool = False) -> int:
 			s.exec(delete(Invoice).where(Invoice.id.in_(inv_ids)))
 
 		s.delete(cust)
+		s.flush()
+		return 1
+
+
+def delete_invoice(invoice_id: int) -> int:
+	"""Delete a single invoice and all of its items. Returns 1 if deleted, 0 if not found."""
+	with session_scope() as s:
+		inv = s.get(Invoice, invoice_id)
+		if not inv:
+			return 0
+		# Remove dependent items first for compatibility across SQLite versions
+		s.exec(delete(Item).where(Item.invoice_id == invoice_id))
+		s.delete(inv)
 		s.flush()
 		return 1
 
