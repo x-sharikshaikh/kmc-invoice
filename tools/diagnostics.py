@@ -70,16 +70,29 @@ def db_and_pdf_checks(tmp_dir: Path) -> None:
 
     try:
         cust = get_or_create_customer("DiagTest Customer", phone="0000000000", address="Diag Addr")
-        inv_no = f"DIAG-{date.today().strftime('%Y%m%d')}"
-        inv = create_invoice({
-            'number': inv_no,
-            'date': date.today(),
-            'customer_id': int(cust.id),  # type: ignore[arg-type]
-            'items': [
-                {'description': 'Ping', 'qty': 1, 'rate': 1.23},
-                {'description': 'Pong', 'qty': 2, 'rate': 4.56},
-            ],
-        })
+        base = f"DIAG-{date.today().strftime('%Y%m%d')}"
+        inv_no = base
+        inv = None
+        # Try base, then append -1..-20 until it succeeds to keep the diagnostic idempotent
+        for i in range(0, 21):
+            try:
+                candidate = inv_no if i == 0 else f"{base}-{i}"
+                inv = create_invoice({
+                    'number': candidate,
+                    'date': date.today(),
+                    'customer_id': int(cust.id),  # type: ignore[arg-type]
+                    'items': [
+                        {'description': 'Ping', 'qty': 1, 'rate': 1.23},
+                        {'description': 'Pong', 'qty': 2, 'rate': 4.56},
+                    ],
+                })
+                break
+            except ValueError as ve:
+                if "already exists" in str(ve).lower():
+                    continue
+                raise
+        if inv is None:
+            raise RuntimeError("Could not allocate a unique diagnostic invoice number")
         _ok(f"Created invoice {inv.number}")
     except Exception as e:
         _fail("create test invoice", e)
