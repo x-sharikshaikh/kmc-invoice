@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kmc-invoice"
+version = "0.1.0"
+description = "Offline invoice app using PySide6 and ReportLab"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pyside6==6.9.1",
+    "reportlab==4.4.3",
+    "pypdf==6.0.0",
+    "sqlmodel==0.0.8",
+    "sqlalchemy>=1.4,<2.0",
+    "aiosqlite==0.21.0",
+    "pydantic>=1.10,<2.0",
+    "qdarkstyle==3.2.3",
+    "pyinstaller==6.15.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.4.1"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
