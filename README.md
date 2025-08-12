@@ -1,6 +1,8 @@
 # KMC Invoice App
 
-Windows-only offline invoice app using PySide6, ReportLab, SQLModel/SQLite, and PyInstaller.
+Offline invoice app targeting Windows, built with PySide6, ReportLab, SQLModel/SQLite, and PyInstaller.
+
+While the app is geared toward Windows, the Python package can be installed and executed on other platforms for development or testing. PowerShell commands below have POSIX equivalents.
 
 - App code: `app/`
 - Assets: `assets/` (add your `logo.png` and optional `fonts/`)
@@ -14,7 +16,9 @@ Windows-only offline invoice app using PySide6, ReportLab, SQLModel/SQLite, and 
   - `assets/fonts/` (optional; add fonts like Noto Sans; falls back to built-in fonts if missing)
 - If the logo or fonts are missing, PDF generation still works and uses defaults.
 
-## Install & Run (Windows PowerShell)
+## Install & Run
+
+Commands below use PowerShell syntax; on macOS/Linux, replace the activation command with `source .venv/bin/activate`.
 
 1. Optional: create and activate a virtual environment
 
@@ -23,25 +27,17 @@ Windows-only offline invoice app using PySide6, ReportLab, SQLModel/SQLite, and 
     . .venv\Scripts\Activate.ps1
     ```
 
-2. Install dependencies
+2. Install the package (installs dependencies):
 
     ```powershell
-    pip install -r requirements.txt
+    pip install -e .
     ```
 
-3. Launch the app
+3. Launch the app:
 
-  Recommended (runs as a module):
-
-  ```powershell
-  python -m app.main
-  ```
-
-  Or run the script directly:
-
-  ```powershell
-  python app/main.py
-  ```
+    ```powershell
+    python -m app.main
+    ```
 
 PDFs are saved to `~/Documents/KMC Invoices`.
 The SQLite database `kmc.db` and `settings.json` are stored in a user‑writable folder:
@@ -71,7 +67,13 @@ Two options:
 
 - Quick command (PowerShell):
   - Ensure dependencies are installed: `pip install -r requirements.txt`
-  - Build: `pyinstaller --noconfirm --clean --name "KMC Invoice" --noconsole --hidden-import sqlalchemy --hidden-import pydantic --add-data "assets;assets" --add-data "settings.json;." app/main.py`
+  - Build:
+
+    ```powershell
+    pyinstaller --noconfirm --clean --name "KMC Invoice" --noconsole `
+        --hidden-import sqlalchemy --hidden-import pydantic `
+        --add-data "assets;assets" --add-data "settings.json;." app/main.py
+    ```
   - Output: `dist/KMC Invoice/KMC Invoice.exe`
 
 - With spec file:

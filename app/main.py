@@ -1,11 +1,5 @@
 from __future__ import annotations
 
-# Allow running this file directly (python app/main.py) by ensuring the project root is on sys.path
-import os
-import sys
-if __package__ in (None, ""):
-    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Any
