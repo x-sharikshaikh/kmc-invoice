@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QAbstractSpinBox,
 )
 
-from app.core.currency import round_money, fmt_money
+from app.core.currency import round_money, fmt_money, to_decimal, round_money_dec
 
 
 class BlankZeroDoubleSpinBox(QDoubleSpinBox):
@@ -210,16 +210,19 @@ class LineItemRow(QWidget):
         outer.addWidget(frame)
 
     def _recalc(self) -> None:
-        amt = round_money(self.qty_spin.value() * self.rate_spin.value())
-        self.amount_lbl.setText(fmt_money(amt))
-        self.subtotalChanged.emit(float(amt))
+        amt_dec = round_money_dec(to_decimal(self.qty_spin.value()) * to_decimal(self.rate_spin.value()))
+        self.amount_lbl.setText(fmt_money(amt_dec))
+        self.subtotalChanged.emit(float(amt_dec))
 
     def get_data(self) -> Dict[str, float | str]:
+        qty = to_decimal(self.qty_spin.value())
+        rate = to_decimal(self.rate_spin.value())
+        amt = round_money_dec(qty * rate)
         return {
             "description": self.desc_edit.text().strip(),
-            "qty": float(self.qty_spin.value()),
-            "rate": float(self.rate_spin.value()),
-            "amount": float(self.qty_spin.value() * self.rate_spin.value()),
+            "qty": float(qty),
+            "rate": float(rate),
+            "amount": float(amt),
         }
 
 
@@ -290,7 +293,9 @@ class LineItemsWidget(QWidget):
         for i in range(self.vbox.count()):
             w = self.vbox.itemAt(i).widget()
             if hasattr(w, "get_data"):
-                subtotal += float(w.get_data()["amount"])  # type: ignore[index]
+                data = w.get_data()
+                if isinstance(data, dict) and data.get("amount") is not None:
+                    subtotal += float(data["amount"])  # type: ignore[index]
         self.totalsChanged.emit(float(subtotal))
 
     def _on_subtotal_change(self, *_args) -> None:

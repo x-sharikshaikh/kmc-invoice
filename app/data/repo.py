@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.data.db import session_scope, get_session, create_db_and_tables
 from app.data.models import Customer, Invoice, Item
-from app.core.currency import round_money
+from app.core.currency import round_money, to_decimal, round_money_dec, sum_money
 
 
 def get_or_create_customer(name: str, phone: Optional[str] = None, address: Optional[str] = None) -> Customer:
@@ -69,13 +69,14 @@ def create_invoice(invoice_dto: Dict[str, Any]) -> Invoice:
 		if dup:
 			raise ValueError(f"Invoice number already exists: {number}")
 
-		# Compute total from items only (no subtotal field persisted)
-		total_val = 0.0
+		# Compute total from items only (no subtotal field persisted), using Decimal for precision
+		line_totals = []
 		for item in items_dto:
-			q = float(item.get("qty", 0) or 0)
-			r = float(item.get("rate", 0) or 0)
-			total_val += q * r
-		total_val = round_money(total_val)
+			q = to_decimal(item.get("qty", 0) or 0)
+			r = to_decimal(item.get("rate", 0) or 0)
+			line_totals.append(q * r)
+		total_val_dec = sum_money(line_totals)
+		total_val = float(total_val_dec)
 
 		inv = Invoice(
 			number=str(number),
@@ -93,8 +94,8 @@ def create_invoice(invoice_dto: Dict[str, Any]) -> Invoice:
 			it = Item(
 				invoice_id=inv.id,  # type: ignore[arg-type]
 				description=str(item.get("description", "")),
-				qty=float(item.get("qty", 0) or 0),
-				rate=float(item.get("rate", 0) or 0),
+				qty=float(to_decimal(item.get("qty", 0) or 0)),
+				rate=float(to_decimal(item.get("rate", 0) or 0)),
 			)
 			s.add(it)
 
@@ -167,6 +168,53 @@ def list_invoices_full(query: str = "", limit: int = 200) -> List[Dict[str, Any]
 		return out
 
 
+def list_invoices_between(start_date: date | None, end_date: date | None, query: str = "", limit: int = 500) -> List[Dict[str, Any]]:
+	"""List invoices within an optional date range, with optional search query.
+
+	Returns list of dicts: {id, number, date, customer_name, customer_phone, total}
+	"""
+	q = (query or "").strip().lower()
+	with get_session() as s:
+		stmt = (
+			select(
+				Invoice.id,
+				Invoice.number,
+				Invoice.date,
+				Invoice.total,
+				Customer.name.label("customer_name"),
+				Customer.phone.label("customer_phone"),
+			)
+			.select_from(Invoice)
+			.join(Customer, Customer.id == Invoice.customer_id, isouter=True)
+			.order_by(Invoice.date.desc(), Invoice.id.desc())
+		)
+		if start_date:
+			stmt = stmt.where(Invoice.date >= start_date)
+		if end_date:
+			stmt = stmt.where(Invoice.date <= end_date)
+		if q:
+			like = f"%{q}%"
+			stmt = stmt.where((func.lower(Invoice.number).like(like)) | (func.lower(Customer.name).like(like)))
+		if limit and isinstance(limit, int):
+			stmt = stmt.limit(limit)
+		rows = list(s.exec(stmt).all())
+		out: List[Dict[str, Any]] = []
+		for r in rows:
+			try:
+				inv_id, number, d, total, cust_name, cust_phone = r
+			except Exception:
+				inv_id = r[0]; number = r[1]; d = r[2]; total = r[3]; cust_name = r[4] if len(r) > 4 else None; cust_phone = r[5] if len(r) > 5 else None
+			out.append({
+				"id": int(inv_id),
+				"number": str(number),
+				"date": d,
+				"customer_name": cust_name,
+				"customer_phone": cust_phone,
+				"total": float(total or 0.0),
+			})
+		return out
+
+
 def get_invoice_with_items(invoice_id: int) -> Optional[Dict[str, Any]]:
 	"""Fetch a single invoice with its customer and items, as plain dicts for the UI.
 
@@ -186,7 +234,7 @@ def get_invoice_with_items(invoice_id: int) -> Optional[Dict[str, Any]]:
 				"description": getattr(it, "description", ""),
 				"qty": float(getattr(it, "qty", 0.0) or 0.0),
 				"rate": float(getattr(it, "rate", 0.0) or 0.0),
-				"amount": float(getattr(it, "amount", (getattr(it, "qty", 0.0) or 0.0) * (getattr(it, "rate", 0.0) or 0.0))),
+				"amount": float(round_money_dec(to_decimal(getattr(it, "qty", 0.0) or 0.0) * to_decimal(getattr(it, "rate", 0.0) or 0.0))),
 			}
 			for it in (item_rows or [])
 		]

@@ -12,7 +12,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 
 from app.core.paths import resource_path
-from app.core.currency import round_money, fmt_money
+from app.core.currency import round_money, fmt_money, to_decimal, round_money_dec, sum_money
 from app.pdf.table_layout import build_invoice_table
 
 
@@ -462,8 +462,14 @@ def _draw_table_with_platypus(c: Canvas, items: List[Dict[str, Any]], y_start: f
     Uses wrapOn/drawOn to compute actual height to ensure reliable rendering.
     Returns the new y cursor (top of content after drawing the table).
     """
-    # Calculate total for the summary row inside the table
-    total = sum(float(item.get("amount", 0) or 0) for item in items)
+    # Calculate total for the summary row inside the table using Decimal for precision
+    total_dec = sum_money(
+        [
+            to_decimal(item.get("amount", 0) or (to_decimal(item.get("qty", 0) or 0) * to_decimal(item.get("rate", 0) or 0)))
+            for item in items
+        ]
+    )
+    total = float(total_dec)
 
     # Build the table flowable
     # Compute filler height so the table bottom aligns just above the footer area

@@ -224,6 +224,7 @@ class MainWindow(QMainWindow):
         self.btn_settings = QPushButton("Settings")
         self.btn_customers = QPushButton("Customers")
         self.btn_drafts = QPushButton("Saved Drafts")
+        self.btn_all_invoices = QPushButton("All Invoices")
         # Theme toggle (QDarkStyle)
         self.btn_theme = QPushButton("Dark Mode")
         self.btn_theme.setCheckable(True)
@@ -236,6 +237,7 @@ class MainWindow(QMainWindow):
             self.btn_settings,
             self.btn_customers,
             self.btn_drafts,
+            self.btn_all_invoices,
             self.btn_theme,
         ):
             footer.addWidget(b)
@@ -248,6 +250,7 @@ class MainWindow(QMainWindow):
         self.btn_new_invoice.clicked.connect(self.new_invoice)
         self.btn_customers.clicked.connect(self.open_customers)
         self.btn_drafts.clicked.connect(self.open_drafts)
+        self.btn_all_invoices.clicked.connect(self.open_all_invoices)
 
         # Style (light theme by default)
         self.apply_styles()
@@ -648,6 +651,70 @@ class MainWindow(QMainWindow):
                 pass
             return False
         return True
+
+    def open_all_invoices(self) -> None:
+        from PySide6.QtWidgets import QMessageBox, QDialog
+        try:
+            from app.widgets.invoices_dialog import InvoicesDialog
+            from app.data.repo import get_invoice_with_items
+        except Exception as e:
+            try:
+                QMessageBox.warning(self, "All Invoices", f"Could not open invoices dialog.\n\nDetails: {e}")
+            except Exception:
+                pass
+            return
+        try:
+            dlg = InvoicesDialog(self)
+            if dlg.exec() == QDialog.Accepted and getattr(dlg, 'selected_invoice_id', None):
+                inv_id = int(getattr(dlg, 'selected_invoice_id'))
+                data = get_invoice_with_items(inv_id)
+                if not data:
+                    return
+                # Populate BILL TO
+                cust = data.get('customer') or {}
+                try:
+                    self.name_edit.setText(str(cust.get('name') or ""))
+                    self.phone_edit.setText(str(cust.get('phone') or ""))
+                    self.addr_edit.setPlainText(str(cust.get('address') or ""))
+                except Exception:
+                    pass
+                # Invoice basics
+                inv = data.get('invoice') or {}
+                try:
+                    self.inv_number.setText(str(inv.get('number') or ""))
+                except Exception:
+                    pass
+                # Date
+                try:
+                    d = inv.get('date')
+                    if isinstance(d, _date):
+                        self.date_edit.setDate(QDate(d.year, d.month, d.day))
+                except Exception:
+                    pass
+                # Items
+                try:
+                    while self.items.vbox.count():
+                        w = self.items.vbox.itemAt(0).widget()
+                        if w:
+                            self.items.remove_row(w)
+                    loaded = False
+                    for it in (data.get('items') or []):
+                        self.items.add_row(
+                            description=str(it.get('description') or ""),
+                            qty=float(it.get('qty') or 0.0),
+                            rate=float(it.get('rate') or 0.0),
+                        )
+                        loaded = True
+                    if not loaded:
+                        self.items.add_row()
+                    self._recalc_total()
+                except Exception:
+                    pass
+        except Exception as e:
+            try:
+                QMessageBox.warning(self, "All Invoices", f"An error occurred.\n\nDetails: {e}")
+            except Exception:
+                pass
 
 
 def create_main_window() -> QMainWindow:
