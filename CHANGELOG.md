@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Removed
+
+- Legacy PDF overlay/merge pipeline, settings, and tools
+
 ## [1.0.0] - 2025-08-09
 
 ### Added
@@ -11,13 +17,12 @@ All notable changes to this project will be documented in this file.
 - Automatic invoice numbering (peek next on load; increment on save).
 - Settings dialog to manage business info, invoice prefix, tax rate, and logo.
 - Light QSS theme with rounded corners and bold centered table headers; optional dark mode.
-- PDF generation with ReportLab overlay and template merge via pypdf.
+- PDF generation with ReportLab and template merge via pypdf.
 - A4 single-page invoice with right-aligned numeric columns.
 - Resource path helpers compatible with dev and PyInstaller (_MEIPASS).
 - PyInstaller build spec and PowerShell build script bundling assets and fonts.
 - Customers dialog with search and "Use selected" to prefill BILL TO.
 - Export/Import: settings.json (Settings dialog) and customers CSV (Customers dialog).
-- Overlay offset tuning via `assets/overlay_offsets.json` for quick coordinate nudging.
 
 ### Fixed
 
@@ -26,7 +31,7 @@ All notable changes to this project will be documented in this file.
 
 ### Tests
 
-- Pytest covering overlay + merge: verifies A4 single page and presence of date/total text.
+- Pytest covering PDF generation: verifies A4 single page and presence of date/total text.
 
 ### Notes
 

@@ -20,9 +20,6 @@ from app.data.db import create_db_and_tables
 from app.data.repo import get_or_create_customer, create_invoice
 from app.printing.print_windows import print_pdf, open_file
 from app.pdf.pdf_draw import build_invoice_pdf
-# Legacy PDF overlay/merge is no longer used. Kept commented for reference only.
-# from app.pdf.pdf_overlay import build_overlay as build_legacy_overlay  # deprecated
-# from app.pdf.pdf_merge import merge_with_template as merge_legacy      # deprecated
 import logging
 logger = logging.getLogger(__name__)
 from app.core.numbering import bump_sequence_to_at_least, peek_next_invoice_number
@@ -36,7 +33,7 @@ def _collect_items(win) -> List[Dict[str, Any]]:
         if hasattr(win, "items") and hasattr(win.items, "get_items"):
             return list(win.items.get_items())  # type: ignore[no-any-return]
     except Exception:
-        pass
+        logger.exception("Failed to collect line items")
     # Fallback to empty list if widget is missing or errored
     return []
 
@@ -102,7 +99,7 @@ def _wire_shortcuts(win) -> None:
             try:
                 win.items.add_row()
             except Exception:
-                pass
+                logger.exception("Failed to add new item row")
 
     for key in (Qt.Key_Return, Qt.Key_Enter):
         sc = QShortcut(key, win)
@@ -120,11 +117,11 @@ def _wire_shortcuts(win) -> None:
                         try:
                             win.items.remove_row(w)
                         except Exception:
-                            pass
+                            logger.exception("Failed to remove item row")
                     break
                 w = w.parentWidget() if hasattr(w, "parentWidget") else None
         except Exception:
-            pass
+            logger.exception("Delete row shortcut failed")
 
     del_sc = QShortcut(Qt.Key_Delete, win)
     del_sc.activated.connect(_delete_current_row)
@@ -140,7 +137,7 @@ def _wire_shortcuts(win) -> None:
             win.setTabOrder(win.addr_edit, first_row.desc_edit)
     except Exception:
         # If anything fails, skip customizing tab order into items
-        pass
+        logger.exception("Failed to set custom tab order for items")
 
 
 def main() -> None:
@@ -160,7 +157,7 @@ def main() -> None:
             try:
                 win.refresh_settings(new_settings)
             except Exception:
-                pass
+                logger.exception("Failed to refresh UI settings")
 
     # Initialize invoice number on load (peek next)
     try:
@@ -315,10 +312,8 @@ def main() -> None:
             },
     }
 
-        # Build final PDF (always code-drawn). If legacy flag is set, warn and continue.
+        # Build final PDF (code-drawn)
         try:
-            if getattr(settings, 'use_template_overlay', False):
-                logging.warning("use_template_overlay is deprecated and ignored; using code-drawn PDF path.")
             logger.info("Building PDF: %s", out_final)
             build_invoice_pdf(out_final, pdf_data)
             logger.info("PDF built: %s", out_final)
