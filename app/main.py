@@ -172,7 +172,41 @@ def main() -> None:
         is_valid = win.validate_form() if hasattr(win, 'validate_form') else True
         if not is_valid:
             return
-        saved = _save_draft_to_db(win)
+        # Attempt to save; on duplicate invoice number, offer to use next number automatically
+        try:
+            saved = _save_draft_to_db(win)
+        except Exception as e:
+            msg = str(e)
+            # Duplicate invoice number common case: offer auto-fix
+            if isinstance(e, Exception) and "already exists" in msg.lower():
+                try:
+                    from app.data.db import get_session
+                    with get_session() as s:
+                        next_no = peek_next_invoice_number(settings.invoice_prefix, s)
+                    ask = QMessageBox.question(
+                        win,
+                        "Invoice number exists",
+                        f"{msg}\n\nUse next number ({next_no}) and save?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.Yes,
+                    )
+                    if ask == QMessageBox.Yes:
+                        try:
+                            win.inv_number.setText(next_no)
+                            saved = _save_draft_to_db(win)
+                        except Exception as e2:
+                            QMessageBox.critical(win, "Save failed", f"Could not save draft.\n\nDetails: {e2}")
+                            return
+                    else:
+                        QMessageBox.information(win, "Save canceled", "Draft not saved.")
+                        return
+                except Exception:
+                    QMessageBox.critical(win, "Save failed", f"Could not save draft.\n\nDetails: {e}")
+                    return
+            else:
+                QMessageBox.critical(win, "Save failed", f"Could not save draft.\n\nDetails: {e}")
+                return
+
         # Bump sequence and refresh UI number for next invoice entry
         try:
             inv_no = saved['invoice'].number if hasattr(saved['invoice'], 'number') else win.inv_number.text().strip()
@@ -184,6 +218,10 @@ def main() -> None:
                 bump_sequence_to_at_least(prefix, n, s)
                 # Set the next number for convenience
                 win.inv_number.setText(peek_next_invoice_number(prefix, s))
+        except Exception:
+            pass
+        try:
+            win.statusBar().showMessage("Draft saved", 3000)
         except Exception:
             pass
 
