@@ -24,8 +24,8 @@ class Settings:
 	invoice_prefix: str = "KMC-"
 	# Optional absolute/relative path to a logo image
 	logo_path: Optional[str] = None
-        # Remember last used folder for "Save PDF" dialog
-        last_pdf_dir: Optional[str] = None
+	# Remember last used folder for "Save PDF" dialog
+	last_pdf_dir: Optional[str] = None
 
 	@classmethod
 	def from_dict(cls, data: Dict[str, Any]) -> "Settings":
