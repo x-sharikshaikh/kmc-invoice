@@ -9,16 +9,16 @@ COL_W_QTY = 18 * mm
 COL_W_RATE = 24 * mm
 COL_W_AMOUNT = 26 * mm
 
-# Revert to lighter grid with outline equal to grid (original behavior)
-W_GRID    = 0.50  # single border width for all lines
+# Grid styling to match reference invoice
+W_GRID    = 0.60  # slightly thicker grid lines for better visibility
 W_OUTLINE = W_GRID  # outline matches grid
-W_HEAVY   = W_GRID  # header/total separators also match grid
+W_HEAVY   = 0.80  # header/total separators slightly thicker
 
-# Reduced row height to match reference more closely
-BODY_ROW_H = 5 * mm
+# Row height to match reference invoice
+BODY_ROW_H = 6 * mm  # Slightly taller rows for better readability
 
-PADDING_V = (3, 3)   # top, bottom (tighter, reference-like)
-PADDING_H = (5, 5)   # left, right (slightly tighter)
+PADDING_V = (4, 4)   # top, bottom (better spacing)
+PADDING_H = (6, 6)   # left, right (better spacing)
 
 def _col_widths(content_width: float) -> list[float]:
     fixed = COL_W_SL + COL_W_QTY + COL_W_RATE + COL_W_AMOUNT
@@ -76,17 +76,17 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
 
     # Header
     ts.add("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")
-    ts.add("FONTSIZE", (0, 0), (-1, 0), 10)
+    ts.add("FONTSIZE", (0, 0), (-1, 0), 11)  # Slightly larger header text
     ts.add("TEXTCOLOR", (0, 0), (-1, 0), BRAND)
     ts.add("ALIGN", (0, 0), (0, 0), "CENTER")   # Sl.
     ts.add("ALIGN", (2, 0), (4, 0), "CENTER")   # Qty, Rate, Amount
-    ts.add("LINEBELOW", (0, 0), (-1, 0), W_GRID, colors.black)
+    ts.add("LINEBELOW", (0, 0), (-1, 0), W_HEAVY, BRAND)  # Use brand color and thicker line
 
     # Body (rows between header and the combined thank/total row, excluding filler if present)
     last_body_i = (filler_i - 1) if (filler_i is not None) else (thank_total_i - 1)
     if last_body_i >= 1:
         ts.add("FONTNAME", (0, 1), (-1, last_body_i), "Helvetica")
-        ts.add("FONTSIZE", (0, 1), (-1, last_body_i), 9)
+        ts.add("FONTSIZE", (0, 1), (-1, last_body_i), 10)  # Slightly larger body text
         ts.add("TEXTCOLOR", (0, 1), (-1, last_body_i), BRAND)
         ts.add("ALIGN", (0, 1), (0, last_body_i), "CENTER")  # Sl.
         ts.add("ALIGN", (2, 1), (2, last_body_i), "CENTER")  # Qty
@@ -102,7 +102,7 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
     # Left side span across 0..2 and left-align; right side shows Total label and amount
     ts.add("SPAN", (0, thank_total_i), (2, thank_total_i))
     ts.add("FONTNAME", (0, thank_total_i), (0, thank_total_i), "Helvetica-Oblique")
-    ts.add("FONTSIZE", (0, thank_total_i), (0, thank_total_i), 9)
+    ts.add("FONTSIZE", (0, thank_total_i), (0, thank_total_i), 10)  # Slightly larger
     ts.add("TEXTCOLOR", (0, thank_total_i), (0, thank_total_i), BRAND)
     ts.add("ALIGN", (0, thank_total_i), (0, thank_total_i), "LEFT")
 
@@ -110,9 +110,9 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
     ts.add("ALIGN", (3, thank_total_i), (3, thank_total_i), "RIGHT")  # "Total:" aligned to right
     ts.add("ALIGN", (4, thank_total_i), (4, thank_total_i), "RIGHT")  # amount right-aligned
     ts.add("FONTNAME", (3, thank_total_i), (4, thank_total_i), "Helvetica-Bold")
-    ts.add("FONTSIZE", (3, thank_total_i), (4, thank_total_i), 12)
+    ts.add("FONTSIZE", (3, thank_total_i), (4, thank_total_i), 13)  # Larger for emphasis
     ts.add("TEXTCOLOR", (3, thank_total_i), (4, thank_total_i), BRAND)
-    ts.add("LINEABOVE", (0, thank_total_i), (-1, thank_total_i), W_GRID, BRAND)
+    ts.add("LINEABOVE", (0, thank_total_i), (-1, thank_total_i), W_HEAVY, BRAND)  # Thicker line above total
 
     # No filler row to hide
 

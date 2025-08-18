@@ -22,10 +22,10 @@ PAGE_SIZE = A4
 PAGE_WIDTH, PAGE_HEIGHT = PAGE_SIZE
 
 # Margins
-MARGIN_LEFT = 15 * mm
-MARGIN_RIGHT = 15 * mm
-MARGIN_TOP = 18 * mm
-MARGIN_BOTTOM = 18 * mm
+MARGIN_LEFT = 20 * mm  # Slightly wider for better balance
+MARGIN_RIGHT = 20 * mm
+MARGIN_TOP = 20 * mm  # More top space for header
+MARGIN_BOTTOM = 20 * mm
 
 # Header
 HEADER_HEIGHT = 10 * mm 
@@ -34,7 +34,7 @@ LOGO_HEIGHT = 22 * mm
 # Optional right-side name/logo image (match left logo visual height)
 RIGHT_LOGO_WIDTH = 36 * mm
 RIGHT_LOGO_HEIGHT = 22 * mm
-TITLE_FONT_SIZE = 24
+TITLE_FONT_SIZE = 28  # Increased for better prominence
 # Typography ratios for alignment
 # - Approximate ascent fraction of font size above baseline (Helvetica/NotoSans)
 TITLE_ASCENT_RATIO = 0.72
@@ -43,10 +43,10 @@ TITLE_CAP_RATIO = 0.70
 
 # - Target proportion: make the INVOICE text height match the logo height for visual parity
 TITLE_TO_LOGO_RATIO = 0.30
-LABEL_FONT_SIZE = 10
+LABEL_FONT_SIZE = 11  # Slightly larger for better readability
 TEXT_FONT_SIZE = 10
 SMALL_FONT_SIZE = 9
-OWNER_FONT_SIZE = 12
+OWNER_FONT_SIZE = 14  # Larger for prominence
 PHONE_FONT_SIZE = 10
 
 # Table columns (fit within content width = PAGE_WIDTH - margins = 180mm on A4 with 15mm margins)
@@ -348,22 +348,22 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
                 rx = PAGE_WIDTH - MARGIN_RIGHT
                 name_font = bold_font
                 svc_font = font
-                name_size = 10
-                svc_size = 8
-                # Name (right aligned)
+                name_size = OWNER_FONT_SIZE
+                svc_size = 10
+                # Name (right aligned) - larger and more prominent
                 c.setFont(name_font, name_size)
                 c.drawRightString(rx, top_y - 4 * mm, owner)
-                # Service title under it
+                # Service title under it - more prominent
                 if service:
                     c.setFont(svc_font, svc_size)
                     c.drawRightString(rx, top_y - 8 * mm, service)
                 # Three short rules under service, aligned to the right
                 rule_y = top_y - 11 * mm
                 rule_right = rx
-                rule_width = 16 * mm
+                rule_width = 18 * mm  # Slightly wider rules
                 rule_gap = 2 * mm
                 prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
-                c.setLineWidth(1.2)
+                c.setLineWidth(1.5)  # Thicker rules for better visibility
                 for i in range(3):
                     _line(c, rule_right - rule_width, rule_y, rule_right, rule_y)
                     rule_y -= rule_gap
@@ -438,10 +438,10 @@ def _draw_bill_to(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> f
     address = cust.get("address", "")
 
     x = MARGIN_LEFT
-    y = y_top - 6 * mm
+    y = y_top - 8 * mm  # Better spacing from header
     c.setFont(font, LABEL_FONT_SIZE)
     c.drawString(x, y, "BILL TO")
-    y -= 5 * mm
+    y -= 6 * mm  # More space after label
 
     c.setFont(font, TEXT_FONT_SIZE)
     c.drawString(x, y, name)
