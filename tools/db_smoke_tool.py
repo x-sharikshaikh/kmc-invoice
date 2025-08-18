@@ -17,7 +17,6 @@ def main() -> None:
         'date': date.today(),
         'customer_id': c.id,
         'notes': 'hello',
-        'tax': 2.5,
         'items': [
             {'description': 'Widget', 'qty': 2, 'rate': 10},
             {'description': 'Service', 'qty': 1, 'rate': 5},

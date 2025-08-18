@@ -103,6 +103,3 @@ class InvoicesView(QWidget):
         cid = self.current_invoice_id()
         if cid is not None:
             self.invoiceActivated.emit(int(cid))
-        cid = self.current_invoice_id()
-        if cid is not None:
-            self.invoiceActivated.emit(int(cid))

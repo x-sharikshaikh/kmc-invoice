@@ -101,7 +101,7 @@ class AppWindow(QMainWindow):
         except Exception:
             pass
         self.stack.addWidget(self.invoice_view)
-        # Phase 2 views: invoices and customers (items/settings remain placeholders for now)
+        # Additional views: invoices and customers (items/settings are placeholders)
         from app.views.invoices_view import InvoicesView
         from app.views.customers_view import CustomersView
         from app.views.placeholders import placeholder
@@ -138,7 +138,6 @@ class AppWindow(QMainWindow):
         self.btn_save_draft = self.invoice_editor.btn_save_draft
         self.btn_settings = self.invoice_editor.btn_settings
         self.btn_preview = self.footer.btn_preview
-        # TODO(phase2): connect self.btn_preview.clicked to a non-blocking preview dialog
         self.items = self.invoice_editor.items
         self.name_edit = self.invoice_editor.name_edit
         self.phone_edit = self.invoice_editor.phone_edit

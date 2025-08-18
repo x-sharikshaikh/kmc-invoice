@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QTextEdit,
     QDateEdit,
-    # Removed table-related widgets and delegates after migrating to LineItemsWidget
+
     QPushButton,
     QSpacerItem,
     QSizePolicy,

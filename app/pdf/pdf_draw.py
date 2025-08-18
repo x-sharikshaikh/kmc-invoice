@@ -457,30 +457,8 @@ def _draw_bill_to(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> f
     return y - 2 * mm
 
 
-def _draw_table_header(c: Canvas, font: str, bold_font: str, y_top: float) -> float:
-    # This function is now deprecated - table drawing is handled by build_invoice_table
-    # Return a position that accounts for the table header height
-    return y_top - HEADER_ROW_HEIGHT
-
-
 def _ensure_table_within_page(c: Canvas, y_cursor: float, need_height: float) -> bool:
     return (y_cursor - need_height) > (MARGIN_BOTTOM + TOTALS_BLOCK_HEIGHT_MIN)
-
-
-def _draw_table_rows(c: Canvas, font: str, items: List[Dict[str, Any]], start_y: float, total_items: int | None = None) -> Tuple[float, int]:
-    # This function is now deprecated - table drawing is handled by build_invoice_table
-    # Return a position that accounts for the table rows height
-    # Estimate height: header + rows + summary
-    estimated_height = HEADER_ROW_HEIGHT + (len(items) * ROW_HEIGHT) + (2 * ROW_HEIGHT)  # +2 for thank you and total rows
-    return start_y - estimated_height, len(items)
-
-
-def _draw_summary(c: Canvas, font: str, bold_font: str, data: dict, y: float) -> float:
-    # This function is now deprecated - table drawing is handled by build_invoice_table
-    # Return a position that accounts for the summary rows height
-    # Estimate height: thank you row + total row
-    estimated_height = 2 * ROW_HEIGHT
-    return y - estimated_height
 
 
 def _draw_footer(c: Canvas, font: str, bold_font: str, data: Dict[str, Any]) -> None:
@@ -507,8 +485,9 @@ def _draw_footer(c: Canvas, font: str, bold_font: str, data: Dict[str, Any]) -> 
     if mobile:
         lines.append(f"Mobile No: {mobile}")
 
+    # Consistent gap whether or not lines are present
+    gap = 11
     if lines:
-        gap = 11
         # Move the footer text block up by 1mm (1mm down from previous 2mm adjustment)
         y_top = (MARGIN_BOTTOM - FOOTER_SHIFT) + 6 + (1 * mm) + gap * (len(lines) - 1)
         for ln in lines:
@@ -698,7 +677,7 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
         info_y = _draw_invoice_block(c, font, data, y_after_header)
         bill_y = _draw_bill_to(c, font, data, y_after_header)
         table_start_y = min(info_y, bill_y) - TABLE_TOP_GAP + TABLE_Y_SHIFT
-        return _draw_table_header(c, font, bold_font, table_start_y)
+        return table_start_y - HEADER_ROW_HEIGHT
 
     y = new_page(first_page=True)
 
@@ -708,7 +687,7 @@ def build_invoice_pdf(out_path: Path | str, data: Dict[str, Any]) -> None:
     start_index = 0
     while start_index < len(items):
         y_before = y
-        # Use the new Platypus table system instead of deprecated functions
+        # Use the Platypus table system for drawing
         y = _draw_table_with_platypus(c, items[start_index:], y, content_width, data)
         drawn = len(items[start_index:])  # All remaining items are drawn at once
         

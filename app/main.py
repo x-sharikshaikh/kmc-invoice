@@ -24,7 +24,7 @@ SAVE_DIR = Path.home() / "Documents" / "KMC Invoices"
 
 
 def _collect_items(win) -> List[Dict[str, Any]]:
-    """Collect line items from the LineItemsWidget only (legacy table removed)."""
+    """Collect line items from the LineItemsWidget."""
     try:
         if hasattr(win, "items") and hasattr(win.items, "get_items"):
             return list(win.items.get_items())  # type: ignore[no-any-return]
@@ -116,6 +116,37 @@ def _render_file_name(settings: Settings, number: str, customer_name: str, date_
     return _sanitize(fn)
 
 
+def _prepare_pdf_data(settings: Settings, collected: dict, saved: dict, inv_no: str, win) -> dict:
+    """Prepare data structure for PDF generation."""
+    return {
+        'customer': collected['customer'],
+        'invoice': {
+            'number': inv_no,
+            'date': (getattr(saved['invoice'], 'date', None) or win.date_edit.date().toString("dd-MM-yyyy")),
+        },
+        'items': collected['items'],
+        'total': saved.get('total'),
+        'settings': {
+            'business_name': settings.business_name,
+            'owner': settings.owner,
+            'phone': settings.phone,
+            'permit': settings.permit,
+            'pan': settings.pan,
+            'cheque_to': settings.cheque_to,
+            'thank_you': settings.thank_you,
+            'invoice_prefix': settings.invoice_prefix,
+            'logo_path': settings.logo_path,
+            'name_logo_path': getattr(settings, 'name_logo_path', None),
+            'signature_path': getattr(settings, 'signature_path', None),
+        },
+        'business': {
+            'permit': settings.permit,
+            'pan': settings.pan,
+            'cheque_to': settings.cheque_to,
+        },
+    }
+
+
 def _wire_shortcuts(win) -> None:
     # Enter/Return -> Add Row (when focus is within the items widget)
     def _is_within_items_widget() -> bool:
@@ -201,13 +232,14 @@ def main() -> None:
         with get_session() as s:
             win.inv_number.setText(peek_next_invoice_number(settings.invoice_prefix, s))
     except Exception:
-        pass
+        # Fallback to default invoice number if database access fails
+        win.inv_number.setText(f"{settings.invoice_prefix}0001")
 
     # Wire footer buttons
     try:
         win.btn_new_invoice.clicked.connect(win.new_invoice)
     except Exception:
-        pass
+        logger.exception("Failed to connect new invoice button")
     def _log_metric(kind: str, extra: Dict[str, Any] | None = None) -> None:
         try:
             payload = {"t": time.time(), "event": kind}
@@ -390,33 +422,7 @@ def main() -> None:
             out_final = out_dir / f"{base}.pdf"
 
         # Prepare data for the code-drawn generator
-        pdf_data = {
-            'customer': collected['customer'],
-            'invoice': {
-                'number': inv_no,
-                'date': (getattr(saved['invoice'], 'date', None) or win.date_edit.date().toString("dd-MM-yyyy")),
-            },
-            'items': collected['items'],
-            'total': saved.get('total'),
-            'settings': {
-                'business_name': settings.business_name,
-                'owner': settings.owner,
-                'phone': settings.phone,
-                'permit': settings.permit,
-                'pan': settings.pan,
-                'cheque_to': settings.cheque_to,
-                'thank_you': settings.thank_you,
-                'invoice_prefix': settings.invoice_prefix,
-                'logo_path': settings.logo_path,
-                'name_logo_path': getattr(settings, 'name_logo_path', None),
-                'signature_path': getattr(settings, 'signature_path', None),
-            },
-            'business': {
-                'permit': settings.permit,
-                'pan': settings.pan,
-                'cheque_to': settings.cheque_to,
-            },
-    }
+        pdf_data = _prepare_pdf_data(settings, collected, saved, inv_no, win)
 
         # Build final PDF (code-drawn)
         try:
