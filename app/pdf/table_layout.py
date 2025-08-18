@@ -10,15 +10,15 @@ COL_W_RATE = 24 * mm
 COL_W_AMOUNT = 26 * mm
 
 # Grid styling to match reference invoice
-W_GRID    = 0.60  # slightly thicker grid lines for better visibility
-W_OUTLINE = W_GRID  # outline matches grid
-W_HEAVY   = 0.80  # header/total separators slightly thicker
+W_GRID    = 0.50  # standard grid lines for clean appearance
+W_OUTLINE = 0.70  # slightly thicker outline for better definition
+W_HEAVY   = 1.00  # header/total separators thicker for emphasis
 
 # Row height to match reference invoice
-BODY_ROW_H = 6 * mm  # Slightly taller rows for better readability
+BODY_ROW_H = 8 * mm  # Taller rows for better spacing like reference
 
-PADDING_V = (4, 4)   # top, bottom (better spacing)
-PADDING_H = (6, 6)   # left, right (better spacing)
+PADDING_V = (6, 6)   # top, bottom (generous spacing like reference)
+PADDING_H = (8, 8)   # left, right (generous spacing like reference)
 
 def _col_widths(content_width: float) -> list[float]:
     fixed = COL_W_SL + COL_W_QTY + COL_W_RATE + COL_W_AMOUNT
