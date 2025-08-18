@@ -82,8 +82,8 @@ TEXT_COLOR = BRAND
 RULE_COLOR = BRAND                  # for outer borders, header rules, totals box
 GRID_COLOR = BRAND                  # grid lines use brand color as requested
 
-# Footer shifts - position footer closer to table like reference
-FOOTER_SHIFT = 12 * mm  # Move footer up to reduce gap between table and footer
+# Footer shifts - position footer very close to table like reference
+FOOTER_SHIFT = 16 * mm  # Move footer up to eliminate gap between table and footer
 SIGN_BOX_EXTRA_SHIFT = 0 * mm
 
 
@@ -622,10 +622,10 @@ def _draw_table_with_platypus(c: Canvas, items: List[Dict[str, Any]], y_start: f
     probe = build_invoice_table_with_platypus(items, total, content_width, filler_height=0.0)
     _w0, h0 = probe.wrapOn(c, content_width, PAGE_HEIGHT)
 
-    # Compute the target Y where the table bottom should sit: with proper spacing above footer
+    # Compute the target Y where the table bottom should sit: with minimal spacing above footer
     footer_text_top = _footer_text_top_y(data)
-    # Keep minimal breathing space above footer text block (like reference)
-    desired_bottom_y = footer_text_top + 6  # Reduced spacing to match reference invoice
+    # Keep very minimal breathing space above footer text block (like reference)
+    desired_bottom_y = footer_text_top + 2  # Minimal spacing to match reference invoice exactly
 
     # If the natural bottom would sit higher than desired_bottom_y, we can extend
     # borders with a minimal filler so the table touches the footer area visually
