@@ -1,12 +1,17 @@
 {
   "business_name": "KMC Electrical",
-  "owner": "SHAIKH MO.AJAZ",
+  "owner": "SHAIKH MOHAMMADAJAZ",
   "phone": "9998714499",
   "permit": "G-GW-E-000025-NTC(W)2018",
   "pan": "DTPPS1809N",
-  "cheque_to": "Shaikh Mo.Ajaz",
+  "cheque_to": "Shaikh MohammadAjaz",
   "thank_you": "Thank you for choosing KMC!",
   "invoice_prefix": "KMC-",
   "logo_path": "assets/logo.png",
-  "last_pdf_dir": "C:\\Users\\mahir\\Downloads"
+  "name_logo_path": "C:/Users/mahir/Downloads/Project/kmc-invoice/assets/AJAZ LOGO.png",
+  "last_pdf_dir": null,
+  "file_name_template": "{number} - {customer}",
+  "archive_root": null,
+  "archive_by_year": true,
+  "compact_mode": false
 }

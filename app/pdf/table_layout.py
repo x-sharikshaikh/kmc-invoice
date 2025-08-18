@@ -9,12 +9,13 @@ COL_W_QTY = 18 * mm
 COL_W_RATE = 24 * mm
 COL_W_AMOUNT = 26 * mm
 
+# Revert to lighter grid with outline equal to grid (original behavior)
 W_GRID    = 0.50  # single border width for all lines
 W_OUTLINE = W_GRID  # outline matches grid
 W_HEAVY   = W_GRID  # header/total separators also match grid
 
-# Consistent row height for even spacing (approx 6 mm)
-BODY_ROW_H = 6 * mm
+# Reduced row height to match reference more closely
+BODY_ROW_H = 5 * mm
 
 PADDING_V = (3, 3)   # top, bottom (tighter, reference-like)
 PADDING_H = (5, 5)   # left, right (slightly tighter)
@@ -49,11 +50,8 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
             f"{row['amount']:.2f}",
         ])
 
-    # Optional filler row to stretch vertical borders down to footer top
+    # No filler row - keep table compact
     filler_i = None
-    if filler_height and filler_height > 0:
-        data.append(["", "", "", "", ""])  # empty row to fill space
-        filler_i = len(data) - 1
 
     # Combined thank-you and total row (same line):
     #  - Thank you spans columns 0..2 (left side)
@@ -61,24 +59,25 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
     data.append(["Thank you for choosing KMC!", "", "", "Total:", f"{total:.2f}"])
     thank_total_i = len(data) - 1
 
-    # Row heights: set body/header/footer to a consistent height; filler gets dynamic height
+    # Row heights: consistent height for all rows (no filler)
     row_heights = [BODY_ROW_H] * len(data)
-    if filler_i is not None:
-        row_heights[filler_i] = max(0.0, float(filler_height))
 
     t = Table(data, colWidths=_col_widths(content_width), rowHeights=row_heights, repeatRows=1)
 
     ts = TableStyle()
+    # Brand color for entire table (borders, grid, and text)
+    BRAND = colors.HexColor("#1B1464")
     # Inner grid and outer outline
-    ts.add("GRID", (0, 0), (-1, -1), W_GRID, colors.black)
-    ts.add("LINEABOVE", (0, 0), (-1, 0), W_OUTLINE, colors.black)
-    ts.add("LINEBELOW", (0, -1), (-1, -1), W_OUTLINE, colors.black)
-    ts.add("LINEBEFORE", (0, 0), (0, -1), W_OUTLINE, colors.black)
-    ts.add("LINEAFTER", (-1, 0), (-1, -1), W_OUTLINE, colors.black)
+    ts.add("GRID", (0, 0), (-1, -1), W_GRID, BRAND)
+    ts.add("LINEABOVE", (0, 0), (-1, 0), W_OUTLINE, BRAND)
+    ts.add("LINEBELOW", (0, -1), (-1, -1), W_OUTLINE, BRAND)
+    ts.add("LINEBEFORE", (0, 0), (0, -1), W_OUTLINE, BRAND)
+    ts.add("LINEAFTER", (-1, 0), (-1, -1), W_OUTLINE, BRAND)
 
     # Header
     ts.add("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")
     ts.add("FONTSIZE", (0, 0), (-1, 0), 10)
+    ts.add("TEXTCOLOR", (0, 0), (-1, 0), BRAND)
     ts.add("ALIGN", (0, 0), (0, 0), "CENTER")   # Sl.
     ts.add("ALIGN", (2, 0), (4, 0), "CENTER")   # Qty, Rate, Amount
     ts.add("LINEBELOW", (0, 0), (-1, 0), W_GRID, colors.black)
@@ -88,6 +87,7 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
     if last_body_i >= 1:
         ts.add("FONTNAME", (0, 1), (-1, last_body_i), "Helvetica")
         ts.add("FONTSIZE", (0, 1), (-1, last_body_i), 9)
+        ts.add("TEXTCOLOR", (0, 1), (-1, last_body_i), BRAND)
         ts.add("ALIGN", (0, 1), (0, last_body_i), "CENTER")  # Sl.
         ts.add("ALIGN", (2, 1), (2, last_body_i), "CENTER")  # Qty
         ts.add("ALIGN", (3, 1), (4, last_body_i), "RIGHT")   # Rate, Amount
@@ -103,6 +103,7 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
     ts.add("SPAN", (0, thank_total_i), (2, thank_total_i))
     ts.add("FONTNAME", (0, thank_total_i), (0, thank_total_i), "Helvetica-Oblique")
     ts.add("FONTSIZE", (0, thank_total_i), (0, thank_total_i), 9)
+    ts.add("TEXTCOLOR", (0, thank_total_i), (0, thank_total_i), BRAND)
     ts.add("ALIGN", (0, thank_total_i), (0, thank_total_i), "LEFT")
 
     # Right side: emphasize the total area
@@ -110,11 +111,10 @@ def build_invoice_table(lines: list[dict], total: float, content_width: float, f
     ts.add("ALIGN", (4, thank_total_i), (4, thank_total_i), "RIGHT")  # amount right-aligned
     ts.add("FONTNAME", (3, thank_total_i), (4, thank_total_i), "Helvetica-Bold")
     ts.add("FONTSIZE", (3, thank_total_i), (4, thank_total_i), 12)
-    ts.add("LINEABOVE", (0, thank_total_i), (-1, thank_total_i), W_GRID, colors.black)
+    ts.add("TEXTCOLOR", (3, thank_total_i), (4, thank_total_i), BRAND)
+    ts.add("LINEABOVE", (0, thank_total_i), (-1, thank_total_i), W_GRID, BRAND)
 
-    # Hide any filler text (keep grid for vertical lines)
-    if filler_i is not None:
-        ts.add("TEXTCOLOR", (0, filler_i), (-1, filler_i), colors.white)
+    # No filler row to hide
 
     # Vertically center all cells
     ts.add("VALIGN", (0, 0), (-1, -1), "MIDDLE")

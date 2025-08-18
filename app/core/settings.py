@@ -24,8 +24,23 @@ class Settings:
 	invoice_prefix: str = "KMC-"
 	# Optional absolute/relative path to a logo image
 	logo_path: Optional[str] = None
+	# Optional right-side name/logo image shown at top-right of the PDF
+	name_logo_path: Optional[str] = None
+	# Optional digital signature image placed inside the signatory box
+	signature_path: Optional[str] = None
+	# Optional service title/tagline shown under owner name when right logo image is not set
+	service_title: str = "ELECTRICAL WORK"
 	# Remember last used folder for "Save PDF" dialog
 	last_pdf_dir: Optional[str] = None
+	# Phase 3: file naming and archive organization
+	# Template supports {number}, {date}, {customer}, {phone}
+	file_name_template: str = "{number} - {customer}"
+	# Optional root directory for saving PDFs; if None, defaults to Documents/KMC Invoices
+	archive_root: Optional[str] = None
+	# When True, create a subfolder per year under the archive root
+	archive_by_year: bool = True
+	# Phase 4: compact mode for denser UI
+	compact_mode: bool = False
 
 	@classmethod
 	def from_dict(cls, data: Dict[str, Any]) -> "Settings":

@@ -54,7 +54,55 @@ class SettingsDialog(QDialog):
         form.addRow("Cheque To", self.ed_cheque_to)
         form.addRow("Thank You", self.ed_thank_you)
         form.addRow("Invoice Prefix", self.ed_prefix)
-        form.addRow("Logo Path", logo_row)
+        form.addRow("Logo Path (left)", logo_row)
+
+        # Optional right-side name/logo path
+        self.ed_right_logo = QLineEdit(getattr(settings, 'name_logo_path', None) or "")
+        btn_browse_right = QPushButton("Browse…")
+        btn_browse_right.clicked.connect(self._browse_right_logo)
+        right_logo_row = QHBoxLayout()
+        right_logo_row.addWidget(self.ed_right_logo)
+        right_logo_row.addWidget(btn_browse_right)
+        form.addRow("Name Logo Path (right)", right_logo_row)
+
+        # Optional digital signature image
+        self.ed_signature = QLineEdit(getattr(settings, 'signature_path', None) or "")
+        btn_browse_sig = QPushButton("Browse…")
+        btn_browse_sig.clicked.connect(self._browse_signature)
+        sig_row = QHBoxLayout()
+        sig_row.addWidget(self.ed_signature)
+        sig_row.addWidget(btn_browse_sig)
+        form.addRow("Signature Image (PNG/JPG)", sig_row)
+
+        # Phase 3: File naming template and archive options
+        self.ed_file_tpl = QLineEdit(settings.file_name_template)
+        self.ed_file_tpl.setPlaceholderText("e.g. {number} - {customer}")
+        form.addRow("File Name Template", self.ed_file_tpl)
+
+        self.ed_archive_root = QLineEdit(settings.archive_root or "")
+        btn_browse_root = QPushButton("Browse…")
+        btn_browse_root.clicked.connect(self._browse_archive_root)
+        root_row = QHBoxLayout()
+        root_row.addWidget(self.ed_archive_root)
+        root_row.addWidget(btn_browse_root)
+        form.addRow("Archive Root", root_row)
+
+        try:
+            from PySide6.QtWidgets import QCheckBox
+            self.chk_archive_by_year = QCheckBox("Group PDFs by year in subfolders")
+            self.chk_archive_by_year.setChecked(bool(getattr(settings, 'archive_by_year', True)))
+            form.addRow("Archive Options", self.chk_archive_by_year)
+        except Exception:
+            self.chk_archive_by_year = None
+
+        # Phase 4: Compact mode
+        try:
+            from PySide6.QtWidgets import QCheckBox
+            self.chk_compact = QCheckBox("Compact mode (denser spacing)")
+            self.chk_compact.setChecked(bool(getattr(settings, 'compact_mode', False)))
+            form.addRow("Display", self.chk_compact)
+        except Exception:
+            self.chk_compact = None
 
         root.addLayout(form)
 
@@ -79,6 +127,15 @@ class SettingsDialog(QDialog):
         self.btn_reset.clicked.connect(self._reset_defaults)
         root.addWidget(self.btn_reset)
 
+    def _browse_archive_root(self) -> None:
+        path = QFileDialog.getExistingDirectory(
+            self,
+            "Select Archive Folder",
+            str(Path.home()),
+        )
+        if path:
+            self.ed_archive_root.setText(path)
+
     def _browse_logo(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -88,6 +145,26 @@ class SettingsDialog(QDialog):
         )
         if path:
             self.ed_logo.setText(path)
+
+    def _browse_right_logo(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Right-side Name Logo Image",
+            str(Path.home()),
+            "Images (*.png *.jpg *.jpeg *.bmp *.gif);;All Files (*.*)",
+        )
+        if path:
+            self.ed_right_logo.setText(path)
+
+    def _browse_signature(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Digital Signature Image",
+            str(Path.home()),
+            "Images (*.png *.jpg *.jpeg *.bmp *.gif);;All Files (*.*)",
+        )
+        if path:
+            self.ed_signature.setText(path)
 
     def _export_settings(self) -> None:
         # Choose where to save a JSON dump of the current settings fields
@@ -128,6 +205,14 @@ class SettingsDialog(QDialog):
             self.ed_thank_you.setText(s.thank_you)
             self.ed_prefix.setText(s.invoice_prefix)
             self.ed_logo.setText(s.logo_path or "")
+            try:
+                self.ed_right_logo.setText(getattr(s, 'name_logo_path', None) or "")
+            except Exception:
+                pass
+            try:
+                self.ed_signature.setText(getattr(s, 'signature_path', None) or "")
+            except Exception:
+                pass
             QMessageBox.information(self, "Import Settings", "Settings loaded. Click Save to apply.")
         except Exception as e:
             QMessageBox.warning(self, "Import Failed", f"Could not import settings:\n{e}")
@@ -144,6 +229,12 @@ class SettingsDialog(QDialog):
             thank_you=self.ed_thank_you.text().strip(),
             invoice_prefix=self.ed_prefix.text().strip() or self._orig.invoice_prefix,
             logo_path=(self.ed_logo.text().strip() or None),
+            name_logo_path=(self.ed_right_logo.text().strip() or None),
+            signature_path=(self.ed_signature.text().strip() or None),
+            file_name_template=(self.ed_file_tpl.text().strip() or self._orig.file_name_template),
+            archive_root=(self.ed_archive_root.text().strip() or None),
+            archive_by_year=bool(self.chk_archive_by_year.isChecked()) if self.chk_archive_by_year else True,
+            compact_mode=bool(self.chk_compact.isChecked()) if self.chk_compact else False,
         )
 
     def _reset_defaults(self) -> None:
@@ -158,3 +249,20 @@ class SettingsDialog(QDialog):
         self.ed_thank_you.setText(s.thank_you)
         self.ed_prefix.setText(s.invoice_prefix)
         self.ed_logo.setText(s.logo_path or "")
+        try:
+            self.ed_right_logo.setText(getattr(s, 'name_logo_path', None) or "")
+        except Exception:
+            pass
+        try:
+            self.ed_signature.setText(getattr(s, 'signature_path', None) or "")
+        except Exception:
+            pass
+        try:
+            self.ed_file_tpl.setText(s.file_name_template)
+            self.ed_archive_root.setText(s.archive_root or "")
+            if self.chk_archive_by_year:
+                self.chk_archive_by_year.setChecked(bool(getattr(s, 'archive_by_year', True)))
+            if self.chk_compact:
+                self.chk_compact.setChecked(bool(getattr(s, 'compact_mode', False)))
+        except Exception:
+            pass

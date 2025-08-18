@@ -4,11 +4,18 @@ import os
 import sys
 import traceback
 from pathlib import Path
+import os
+import sys
 from datetime import date
 from importlib import import_module
 import pkgutil
 
 RESULTS: list[str] = []
+
+# Ensure project root is on sys.path for direct execution
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 
 def _ok(msg: str) -> None:

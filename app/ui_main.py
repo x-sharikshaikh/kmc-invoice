@@ -214,8 +214,9 @@ class MainWindow(QMainWindow):
         summary.addLayout(summary_box)
         root_layout.addLayout(summary)
 
-        # Footer buttons
-        footer = QHBoxLayout()
+        # Footer buttons (wrapped in a widget so shells can hide/replace)
+        self.footer_widget = QWidget()
+        footer = QHBoxLayout(self.footer_widget)
         footer.addStretch(1)
         self.btn_new_invoice = QPushButton("New Invoice")
         self.btn_save_pdf = QPushButton("Save PDF")
@@ -241,7 +242,7 @@ class MainWindow(QMainWindow):
             self.btn_theme,
         ):
             footer.addWidget(b)
-        root_layout.addLayout(footer)
+        root_layout.addWidget(self.footer_widget)
 
         self.setCentralWidget(root)
 
@@ -555,6 +556,18 @@ class MainWindow(QMainWindow):
             self.inv_number.setText(f"{self.settings.invoice_prefix}0001")
         # Recalculate total (no tax in UI)
         self._recalc_total()
+        # Apply compact mode tweaks (lighter spacing/font) without changing layout structure
+        try:
+            if bool(getattr(self.settings, 'compact_mode', False)):
+                self.setStyleSheet(self.styleSheet().replace('font-size: 13px', 'font-size: 12px'))
+            else:
+                # Reapply base style to reset any compact overrides
+                if self.dark_mode:
+                    self.apply_dark_styles()
+                else:
+                    self.apply_styles()
+        except Exception:
+            pass
 
     # --- Validation helpers ---
     def _clear_validation_styles(self) -> None:
@@ -718,7 +731,13 @@ class MainWindow(QMainWindow):
 
 
 def create_main_window() -> QMainWindow:
-    return MainWindow()
+    """Factory used by main.py. Returns the new shell AppWindow wrapping the editor."""
+    try:
+        from app.shell import create_app_window
+        return create_app_window()
+    except Exception:
+        # Fallback to legacy single-window editor if shell cannot be created
+        return MainWindow()
 
     
     

@@ -46,6 +46,8 @@ def sample_data() -> dict:
             # no tax in new flow
             "tax_rate": 0.0,
             "logo_path": settings.logo_path,
+            "name_logo_path": getattr(settings, "name_logo_path", None),
+            "signature_path": getattr(settings, "signature_path", None),
         },
         "business": {"permit": settings.permit, "pan": settings.pan, "cheque_to": settings.cheque_to},
     }

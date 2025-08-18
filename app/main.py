@@ -17,6 +17,8 @@ from app.pdf.pdf_draw import build_invoice_pdf
 import logging
 logger = logging.getLogger(__name__)
 from app.core.numbering import bump_sequence_to_at_least, peek_next_invoice_number
+from app.styles.tokens import Metrics
+import json, time
 
 SAVE_DIR = Path.home() / "Documents" / "KMC Invoices"
 
@@ -69,9 +71,49 @@ def _save_draft_to_db(win) -> Dict[str, Any]:
     }
 
 
-def _ensure_save_dir() -> Path:
-    SAVE_DIR.mkdir(parents=True, exist_ok=True)
-    return SAVE_DIR
+def _effective_archive_root(settings: Settings) -> Path:
+    try:
+        root = Path(settings.archive_root) if getattr(settings, 'archive_root', None) else SAVE_DIR
+    except Exception:
+        root = SAVE_DIR
+    return root
+
+def _ensure_save_dir(settings: Settings, inv_date_str: str | None = None) -> Path:
+    """Ensure the archive directory exists, considering yearly subfolders."""
+    root = _effective_archive_root(settings)
+    out_dir = root
+    try:
+        if getattr(settings, 'archive_by_year', True):
+            # inv_date_str can be 'dd-MM-yyyy' or date object str; extract year safely
+            year = None
+            if inv_date_str:
+                try:
+                    parts = [p for p in inv_date_str.replace('/', '-').split('-') if p]
+                    if len(parts) == 3:
+                        # dd-MM-yyyy
+                        year = parts[2]
+                except Exception:
+                    year = None
+            from datetime import datetime as _dt
+            if not year:
+                year = str(_dt.now().year)
+            out_dir = root / year
+    except Exception:
+        out_dir = root
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return out_dir
+
+def _render_file_name(settings: Settings, number: str, customer_name: str, date_str: str, phone: str) -> str:
+    tpl = getattr(settings, 'file_name_template', '{number} - {customer}') or '{number} - {customer}'
+    def _sanitize(name: str) -> str:
+        for ch in '<>:"/\\|?*':
+            name = name.replace(ch, '-')
+        return name.strip() or 'invoice'
+    try:
+        fn = tpl.format(number=number, customer=customer_name, date=date_str, phone=phone)
+    except Exception:
+        fn = f"{number} - {customer_name}"
+    return _sanitize(fn)
 
 
 def _wire_shortcuts(win) -> None:
@@ -166,6 +208,19 @@ def main() -> None:
         win.btn_new_invoice.clicked.connect(win.new_invoice)
     except Exception:
         pass
+    def _log_metric(kind: str, extra: Dict[str, Any] | None = None) -> None:
+        try:
+            payload = {"t": time.time(), "event": kind}
+            if extra:
+                payload.update(extra)
+            (Path.home() / "Documents" / "KMC Invoices" / Metrics.FILE).parent.mkdir(parents=True, exist_ok=True)
+            with open(Path.home() / "Documents" / "KMC Invoices" / Metrics.FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(payload, default=str) + "\n")
+        except Exception:
+            pass
+
+    _log_metric(Metrics.SESSION_START)
+
     def on_save_draft():
         # Ensure settings reflect latest on-disk config
         _reload_settings_from_disk()
@@ -175,6 +230,7 @@ def main() -> None:
         # Attempt to save; on duplicate invoice number, offer to use next number automatically
         try:
             saved = _save_draft_to_db(win)
+            _log_metric(Metrics.SAVE_DRAFT, {"items": len(saved.get("items", [])), "total": saved.get("total")})
         except Exception as e:
             msg = str(e)
             # Duplicate invoice number common case: offer auto-fix
@@ -246,7 +302,7 @@ def main() -> None:
         # Ensure the default save directory exists only when we are auto-picking it
         if out_path is None:
             try:
-                out_dir = _ensure_save_dir()
+                out_dir = _ensure_save_dir(settings, win.date_edit.date().toString("dd-MM-yyyy"))
                 if not out_dir.exists() or not out_dir.is_dir():
                     raise OSError(str(out_dir))
             except Exception:
@@ -288,6 +344,18 @@ def main() -> None:
                 logger.info("Saved invoice %s to DB", inv_no_log)
             except Exception:
                 logger.info("Saved invoice to DB")
+            # Write a simple backup snapshot (non-authoritative)
+            try:
+                backup_dir = Path.home() / "Documents" / "KMC Invoices" / "backups"
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                snap = {
+                    "invoice": getattr(saved.get("invoice"), "number", None) if isinstance(saved, dict) else None,
+                    "data": collected,
+                }
+                with open(backup_dir / f"{inv_no_log}.json", "w", encoding="utf-8") as f:
+                    json.dump(snap, f, default=str, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
         except Exception as e:
             QMessageBox.critical(win, "Save failed", f"Could not save invoice to the database.\n\nDetails: {e}")
             return
@@ -314,8 +382,12 @@ def main() -> None:
             except Exception:
                 pass
         else:
-            out_dir = _ensure_save_dir()
-            out_final = out_dir / f"{inv_no}.pdf"
+            out_dir = _ensure_save_dir(settings, win.date_edit.date().toString("dd-MM-yyyy"))
+            cust_name = collected['customer'].get('name', '') if isinstance(collected, dict) else ''
+            cust_phone = collected['customer'].get('phone', '') if isinstance(collected, dict) else ''
+            inv_date_str = win.date_edit.date().toString("dd-MM-yyyy")
+            base = _render_file_name(settings, inv_no, cust_name, inv_date_str, cust_phone)
+            out_final = out_dir / f"{base}.pdf"
 
         # Prepare data for the code-drawn generator
         pdf_data = {
@@ -336,6 +408,8 @@ def main() -> None:
                 'thank_you': settings.thank_you,
                 'invoice_prefix': settings.invoice_prefix,
                 'logo_path': settings.logo_path,
+                'name_logo_path': getattr(settings, 'name_logo_path', None),
+                'signature_path': getattr(settings, 'signature_path', None),
             },
             'business': {
                 'permit': settings.permit,
@@ -349,6 +423,7 @@ def main() -> None:
             logger.info("Building PDF: %s", out_final)
             build_invoice_pdf(out_final, pdf_data)
             logger.info("PDF built: %s", out_final)
+            _log_metric(Metrics.SAVE_PDF, {"path": str(out_final)})
         except Exception as e:
             QMessageBox.critical(win, "PDF failed", f"Could not generate the PDF.\n\nDetails: {e}")
             return
@@ -378,6 +453,7 @@ def main() -> None:
                     "Print",
                     "Couldn’t auto‑print. Please open the saved PDF and print from your viewer.",
                 )
+            _log_metric(Metrics.PRINT, {"path": str(out_final), "ok": bool(ok)})
         else:
             # Open the PDF in default viewer; optionally open folder on failure
             try:
@@ -404,18 +480,21 @@ def main() -> None:
         return name.strip() or 'invoice'
 
     def on_save_pdf_with_prompt():
-        # Ask user where to save the PDF, defaulting to Documents/KMC Invoices/<invoice>.pdf
+    # Ask user where to save the PDF, defaulting to archive root (with year subfolder) and templated file name
         try:
             inv_no = getattr(win, 'inv_number', None).text().strip() if hasattr(win, 'inv_number') else 'invoice'
         except Exception:
             inv_no = 'invoice'
-        default_name = f"{_sanitize_filename(inv_no)}.pdf"
-        # Determine starting directory: last used, else default save dir
+        cust_name = getattr(win, 'name_edit', None).text().strip() if hasattr(win, 'name_edit') else ''
+        cust_phone = getattr(win, 'phone_edit', None).text().strip() if hasattr(win, 'phone_edit') else ''
+        inv_date_str = win.date_edit.date().toString("dd-MM-yyyy")
+        default_name = f"{_render_file_name(settings, inv_no, cust_name, inv_date_str, cust_phone)}.pdf"
+        # Determine starting directory: last used, else archive dir considering year
         try:
             last_dir = getattr(settings, 'last_pdf_dir', None)
-            start_dir = Path(last_dir) if last_dir else _ensure_save_dir()
+            start_dir = Path(last_dir) if last_dir else _ensure_save_dir(settings, inv_date_str)
         except Exception:
-            start_dir = _ensure_save_dir()
+            start_dir = _ensure_save_dir(settings, inv_date_str)
         initial_path = str(Path(start_dir) / default_name)
         try:
             sel_path, _ = QFileDialog.getSaveFileName(
@@ -445,6 +524,32 @@ def main() -> None:
     # Save PDF should prompt the user for a location
     win.btn_save_pdf.clicked.connect(on_save_pdf_with_prompt)
     win.btn_print.clicked.connect(lambda: on_save_pdf_and_optionally_print(True))
+    # Preview wiring (shell adds btn_preview; fallback if absent)
+    def on_preview():
+        try:
+            from app.widgets.preview_dialog import PdfPreviewDialog
+            data = win.collect_data() if hasattr(win, 'collect_data') else None
+            if not data:
+                return
+            dlg = PdfPreviewDialog(win)
+            in_app = dlg.load_from_data(data)
+            if in_app:
+                dlg.exec()
+            else:
+                # Fallback: open in default viewer
+                p = dlg.temp_path()
+                if p:
+                    try:
+                        open_file(str(p))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    if hasattr(win, 'btn_preview') and getattr(win, 'btn_preview') is not None:
+        try:
+            win.btn_preview.clicked.connect(on_preview)
+        except Exception:
+            pass
 
     _wire_shortcuts(win)
 
