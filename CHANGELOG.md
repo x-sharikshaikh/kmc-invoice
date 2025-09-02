@@ -8,6 +8,24 @@ All notable changes to this project will be documented in this file.
 
 - Legacy PDF overlay/merge pipeline, settings, and tools
 
+## [1.1.0] - 2025-09-02
+
+### Changed
+
+- Rewrote invoice table layout to a single Platypus Table with precise column widths and uniform borders.
+- Aligned “BILL TO” and “Invoice No:” on the same baseline.
+- Added tunable constants for header logos, title position, table vertical offset, and footer positioning.
+- Increased table–footer minimal gap for better readability.
+
+### Fixes
+
+- Prevented footer overlap by computing filler height and respecting a minimum gap.
+- Unified all table border thickness to avoid mixed bold/regular lines.
+
+### Docs
+
+- Expanded README with PDF tuning guide and sample generation command.
+
 ## [1.0.0] - 2025-08-09
 
 ### Added

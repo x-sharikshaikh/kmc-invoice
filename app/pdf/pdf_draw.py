@@ -24,17 +24,21 @@ PAGE_WIDTH, PAGE_HEIGHT = PAGE_SIZE
 # Margins
 MARGIN_LEFT = 20 * mm  # Slightly wider for better balance
 MARGIN_RIGHT = 20 * mm
-MARGIN_TOP = 20 * mm  # More top space for header
+MARGIN_TOP = 5 * mm  # Lower header by 5mm
 MARGIN_BOTTOM = 20 * mm
 
 # Header
 HEADER_HEIGHT = 10 * mm 
 LOGO_WIDTH = 36 * mm
 LOGO_HEIGHT = 22 * mm
+# Vertical adjustment for the left logo
+LEFT_LOGO_Y_SHIFT = 7 * mm  # move left logo 7mm down
 # Optional right-side name/logo image (match left logo visual height)
-RIGHT_LOGO_WIDTH = 36 * mm
-RIGHT_LOGO_HEIGHT = 22 * mm
+RIGHT_LOGO_WIDTH = (36 + 15) * mm  # increased by 15mm
+RIGHT_LOGO_HEIGHT = (22 + 15) * mm  # increased by 15mm
 TITLE_FONT_SIZE = 28  # Increased for better prominence
+# Horizontal adjustment for the INVOICE title (negative = left)
+TITLE_X_SHIFT = -5 * mm  # move title 5mm to the left
 # Typography ratios for alignment
 # - Approximate ascent fraction of font size above baseline (Helvetica/NotoSans)
 TITLE_ASCENT_RATIO = 0.72
@@ -48,6 +52,7 @@ TEXT_FONT_SIZE = 10
 SMALL_FONT_SIZE = 9
 OWNER_FONT_SIZE = 14  # Larger for prominence
 PHONE_FONT_SIZE = 10
+HEADER_RULE_RAISE = 10 * mm  # net effect: header line 5mm lower than before
 
 # Table columns (fit within content width = PAGE_WIDTH - margins = 180mm on A4 with 15mm margins)
 # Widths sum to 180mm: 10 + 102 + 18 + 24 + 26 = 180
@@ -67,7 +72,8 @@ TABLE_RIGHT = AMT_X + AMT_W
 ROW_HEIGHT = 6 * mm
 HEADER_ROW_HEIGHT = 8 * mm
 TABLE_TOP_GAP = 6 * mm  # better gap between bill-to/invoice-info and table  
-TABLE_Y_SHIFT = 4 * mm   # balanced shift for proper table positioning
+# Counter-balance: raise table by 5mm to keep position after header shift
+TABLE_Y_SHIFT = 11 * mm   # lowered table by 5mm from previous position
 
 TOTALS_BLOCK_HEIGHT_MIN = 10 * mm  # smaller minimum needed for single summary row
 THANK_YOU_GAP = 6 * mm
@@ -75,6 +81,7 @@ SIGN_BOX_W = 50 * mm
 SIGN_BOX_H = 40 * mm
 SIGN_IMG_PAD = 1.5 * mm
 ROW_BOTTOM_GAP = 4 * mm  # minimal bottom gap beyond page margin
+FOOTER_LINE_GAP = 12  # points between footer text lines (kept in sync across helpers)
 
 # Colors (brand)
 BRAND = colors.HexColor("#1B1464")
@@ -83,7 +90,8 @@ RULE_COLOR = BRAND                  # for outer borders, header rules, totals bo
 GRID_COLOR = BRAND                  # grid lines use brand color as requested
 
 # Footer shifts - position footer very close to table like reference
-FOOTER_SHIFT = 16 * mm  # Move footer up to eliminate gap between table and footer
+# Reverted: restore previous footer position
+FOOTER_SHIFT = 6 * mm  # vertical shift of footer block and signatory box (moved 10mm up)
 SIGN_BOX_EXTRA_SHIFT = 0 * mm
 
 
@@ -131,7 +139,7 @@ def _footer_text_top_y(data: Dict[str, Any]) -> float:
     if mobile:
         lines.append(f"Mobile No: {mobile}")
 
-    gap = 11
+    gap = FOOTER_LINE_GAP
     # Matches _draw_footer: (MARGIN_BOTTOM - FOOTER_SHIFT) + 6 + 1mm + gap*(len(lines)-1)
     return (MARGIN_BOTTOM - FOOTER_SHIFT) + 6 + (1 * mm) + gap * (max(0, len(lines) - 1))
 
@@ -304,9 +312,9 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
         logo_path = None
         right_logo_path = None
 
-    # Position left logo: top aligned with top margin
+    # Position left logo: previously top aligned with top margin; apply downward shift
     logo_x = MARGIN_LEFT
-    logo_y = top_y - LOGO_HEIGHT
+    logo_y = top_y - LOGO_HEIGHT - LEFT_LOGO_Y_SHIFT
     if logo_path and logo_path.exists():
         try:
             c.drawImage(
@@ -374,11 +382,13 @@ def _draw_header(c: Canvas, font: str, bold_font: str, data: Dict[str, Any], fir
 
     # Draw the word "INVOICE" centered, better aligned with logos
     c.setFont(bold_font, TITLE_FONT_SIZE)
-    c.drawCentredString(PAGE_WIDTH / 2, baseline_y + 1 * mm, "INVOICE")
+    # Move title down by 6mm and shift 5mm to the left
+    c.drawCentredString((PAGE_WIDTH / 2) + TITLE_X_SHIFT, baseline_y + 1 * mm - (6 * mm), "INVOICE")
 
     # Draw a horizontal rule below the header (full width), positioned just under the lower logo edge
     # With equal logo heights, compute from left logo height
-    line_y = top_y - max(LOGO_HEIGHT, RIGHT_LOGO_HEIGHT) - 3 * mm
+    # Raise the header rule upward by the configured amount
+    line_y = top_y - max(LOGO_HEIGHT, RIGHT_LOGO_HEIGHT) - 3 * mm + HEADER_RULE_RAISE
     prev_w = getattr(c, "_lineWidth", None) or getattr(c, "_linewidth", None)
     prev_stroke = getattr(c, '_strokeColor', None)
     c.setStrokeColor(RULE_COLOR)
@@ -438,7 +448,7 @@ def _draw_bill_to(c: Canvas, font: str, data: Dict[str, Any], y_top: float) -> f
     address = cust.get("address", "")
 
     x = MARGIN_LEFT
-    y = y_top - 8 * mm  # Better spacing from header
+    y = y_top - 6 * mm  # Align with Invoice No baseline
     c.setFont(font, LABEL_FONT_SIZE)
     c.drawString(x, y, "BILL TO")
     y -= 6 * mm  # More space after label
@@ -486,7 +496,7 @@ def _draw_footer(c: Canvas, font: str, bold_font: str, data: Dict[str, Any]) -> 
         lines.append(f"Mobile No: {mobile}")
 
     # Consistent gap whether or not lines are present
-    gap = 11
+    gap = FOOTER_LINE_GAP
     if lines:
         # Move the footer text block up by 1mm (1mm down from previous 2mm adjustment)
         y_top = (MARGIN_BOTTOM - FOOTER_SHIFT) + 6 + (1 * mm) + gap * (len(lines) - 1)
@@ -624,15 +634,19 @@ def _draw_table_with_platypus(c: Canvas, items: List[Dict[str, Any]], y_start: f
 
     # Compute the target Y where the table bottom should sit: with minimal spacing above footer
     footer_text_top = _footer_text_top_y(data)
-    # Keep very minimal breathing space above footer text block (like reference)
-    desired_bottom_y = footer_text_top + 2  # Minimal spacing to match reference invoice exactly
+    # Keep a clear breathing space above footer text block for alignment
+    # Increased by 5mm (from 6mm to 11mm)
+    desired_bottom_y = footer_text_top + (11 * mm)
 
-    # If the natural bottom would sit higher than desired_bottom_y, we can extend
-    # borders with a minimal filler so the table touches the footer area visually
+    # If the natural bottom would sit higher than desired_bottom_y, extend
+    # borders with a filler so the table visually reaches down to the footer area
     natural_bottom_y = y_start - h0
     filler = 0.0
     if natural_bottom_y > desired_bottom_y:
-        filler = min(float(natural_bottom_y - desired_bottom_y), 40.0)  # cap filler for safety
+        # Use the exact required filler height; keep a tiny epsilon to avoid overlap
+        filler = float(natural_bottom_y - desired_bottom_y)
+        if filler < 0:
+            filler = 0.0
 
     # Build the final table with the computed filler height
     table = build_invoice_table_with_platypus(items, total, content_width, filler_height=filler)

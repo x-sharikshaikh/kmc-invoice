@@ -1,123 +1,134 @@
-# app/pdf/table_layout.py
+"""Invoice table layout — pixel-aligned to the provided reference image.
+
+This module builds a single Platypus Table containing:
+  - Header row: Sl., Description, Qty, Rate, Amount
+  - Body rows for items
+  - Optional filler row (blank) to extend the grid downwards for the long empty area
+  - Bottom row combining: "Thank you for choosing KMC!" on the left, and a Total block on the right
+
+Styling matches the reference:
+  - Brand color for text and rules (#1B1464)
+  - Thicker outline and header/total separators
+  - Numeric alignment (Qty centered; Rate/Amount right)
+  - Tight paddings for crisp alignment
+"""
+
+from typing import Any, Dict, List
+
 from reportlab.platypus import Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 
-# Column widths (in mm) to match the reference invoice; Description absorbs remainder
+# Brand color and uniform line weight
+BRAND = colors.HexColor("#1B1464")
+# Use a single stroke width for all table rules to avoid bold/different borders
+W_GRID = 0.50      # all grid and separators
+
+# Column widths (in mm) like the reference; description takes the remainder
 COL_W_SL = 12 * mm
 COL_W_QTY = 18 * mm
 COL_W_RATE = 24 * mm
 COL_W_AMOUNT = 26 * mm
 
-# Grid styling to match reference invoice
-W_GRID    = 0.50  # standard grid lines for clean appearance
-W_OUTLINE = 0.70  # slightly thicker outline for better definition
-W_HEAVY   = 1.00  # header/total separators thicker for emphasis
+# Row heights and paddings (compact, crisp)
+HEADER_H = 8 * mm
+BODY_H = 8 * mm
+THANK_H = 7 * mm
+PAD_L, PAD_R = 6, 6
+PAD_T, PAD_B = 3, 3
 
-# Row height to match reference invoice
-BODY_ROW_H = 8 * mm  # Taller rows for better spacing like reference
 
-PADDING_V = (6, 6)   # top, bottom (generous spacing like reference)
-PADDING_H = (8, 8)   # left, right (generous spacing like reference)
-
-def _col_widths(content_width: float) -> list[float]:
+def _col_widths(content_width: float) -> List[float]:
     fixed = COL_W_SL + COL_W_QTY + COL_W_RATE + COL_W_AMOUNT
-    # Ensure Description gets at least a practical minimum; use the remainder for exact fit
-    desc = max(120.0, content_width - fixed)
-    return [
-        COL_W_SL,
-        desc,
-        COL_W_QTY,
-        COL_W_RATE,
-        COL_W_AMOUNT,
-    ]
+    desc = max(100.0, float(content_width) - float(fixed))
+    return [COL_W_SL, desc, COL_W_QTY, COL_W_RATE, COL_W_AMOUNT]
 
-def build_invoice_table(lines: list[dict], total: float, content_width: float, filler_height: float = 0.0):
-    """
-    Build a table that matches Reference Invoice.jpg.
-    lines: list of dicts with keys sl, description, qty, rate, amount
-    total: numeric total
-    content_width: usable width inside margins
-    """
-    data = [["Sl.", "Description", "Qty", "Rate", "Amount"]]
 
+def _fmt2(val: Any) -> str:
+    try:
+        return f"{float(val):.2f}"
+    except Exception:
+        return "0.00"
+
+
+def build_invoice_table(lines: List[Dict[str, Any]], total: float, content_width: float, filler_height: float = 0.0) -> Table:
+    # Build data rows
+    data: List[List[str]] = [["Sl.", "Description", "Qty", "Rate", "Amount"]]
     for row in lines:
         data.append([
-            row["sl"],
-            row["description"],
-            f"{float(row['qty']):.2f}",
-            f"{row['rate']:.2f}",
-            f"{row['amount']:.2f}",
+            str(row.get("sl", "")),
+            str(row.get("description", "")),
+            _fmt2(row.get("qty", 0)),
+            _fmt2(row.get("rate", 0)),
+            _fmt2(row.get("amount", 0)),
         ])
 
-    # No filler row - keep table compact
-    filler_i = None
+    filler_i: int | None = None
+    if isinstance(filler_height, (int, float)) and filler_height > 1.0:
+        data.append(["", "", "", "", ""])  # blank row to extend grid
+        filler_i = len(data) - 1
 
-    # Combined thank-you and total row (same line):
-    #  - Thank you spans columns 0..2 (left side)
-    #  - Column 3 shows "Total:" (right-aligned), column 4 shows amount (right-aligned)
-    data.append(["Thank you for choosing KMC!", "", "", "Total:", f"{total:.2f}"])
-    thank_total_i = len(data) - 1
+    # Thank-you + Total row (in-table, like the image)
+    data.append(["Thank you for choosing KMC!", "", "", "Total:", _fmt2(total)])
+    thank_i = len(data) - 1
 
-    # Row heights: consistent height for all rows (no filler)
-    row_heights = [BODY_ROW_H] * len(data)
+    # Row heights: header + body + optional filler + thank/total
+    row_heights: List[float] = []
+    for r in range(len(data)):
+        if r == 0:
+            row_heights.append(HEADER_H)
+        elif r == thank_i:
+            row_heights.append(THANK_H)
+        elif filler_i is not None and r == filler_i:
+            row_heights.append(float(filler_height))
+        else:
+            row_heights.append(BODY_H)
 
     t = Table(data, colWidths=_col_widths(content_width), rowHeights=row_heights, repeatRows=1)
 
-    ts = TableStyle()
-    # Brand color for entire table (borders, grid, and text)
-    BRAND = colors.HexColor("#1B1464")
-    # Inner grid and outer outline
-    ts.add("GRID", (0, 0), (-1, -1), W_GRID, BRAND)
-    ts.add("LINEABOVE", (0, 0), (-1, 0), W_OUTLINE, BRAND)
-    ts.add("LINEBELOW", (0, -1), (-1, -1), W_OUTLINE, BRAND)
-    ts.add("LINEBEFORE", (0, 0), (0, -1), W_OUTLINE, BRAND)
-    ts.add("LINEAFTER", (-1, 0), (-1, -1), W_OUTLINE, BRAND)
+    ts = TableStyle([
+        # Full grid (includes outer border) with uniform stroke
+        ("GRID", (0, 0), (-1, -1), W_GRID, BRAND),
 
-    # Header
-    ts.add("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")
-    ts.add("FONTSIZE", (0, 0), (-1, 0), 11)  # Slightly larger header text
-    ts.add("TEXTCOLOR", (0, 0), (-1, 0), BRAND)
-    ts.add("ALIGN", (0, 0), (0, 0), "CENTER")   # Sl.
-    ts.add("ALIGN", (2, 0), (4, 0), "CENTER")   # Qty, Rate, Amount
-    ts.add("LINEBELOW", (0, 0), (-1, 0), W_HEAVY, BRAND)  # Use brand color and thicker line
+        # Header
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 11),
+        ("TEXTCOLOR", (0, 0), (-1, 0), BRAND),
+        ("ALIGN", (0, 0), (0, 0), "CENTER"),      # Sl.
+        ("ALIGN", (1, 0), (1, 0), "LEFT"),        # Description
+        ("ALIGN", (2, 0), (4, 0), "CENTER"),      # Qty, Rate, Amount
+    ("LINEBELOW", (0, 0), (-1, 0), W_GRID, BRAND),
 
-    # Body (rows between header and the combined thank/total row, excluding filler if present)
-    last_body_i = (filler_i - 1) if (filler_i is not None) else (thank_total_i - 1)
-    if last_body_i >= 1:
-        ts.add("FONTNAME", (0, 1), (-1, last_body_i), "Helvetica")
-        ts.add("FONTSIZE", (0, 1), (-1, last_body_i), 10)  # Slightly larger body text
-        ts.add("TEXTCOLOR", (0, 1), (-1, last_body_i), BRAND)
-        ts.add("ALIGN", (0, 1), (0, last_body_i), "CENTER")  # Sl.
-        ts.add("ALIGN", (2, 1), (2, last_body_i), "CENTER")  # Qty
-        ts.add("ALIGN", (3, 1), (4, last_body_i), "RIGHT")   # Rate, Amount
+        # Body
+        ("FONTNAME", (0, 1), (-1, thank_i - 1 if filler_i is None else filler_i - 1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, thank_i - 1 if filler_i is None else filler_i - 1), 10),
+        ("TEXTCOLOR", (0, 1), (-1, thank_i - 1 if filler_i is None else filler_i - 1), BRAND),
+        ("ALIGN", (0, 1), (0, thank_i - 1 if filler_i is None else filler_i - 1), "CENTER"),   # Sl.
+        ("ALIGN", (1, 1), (1, thank_i - 1 if filler_i is None else filler_i - 1), "LEFT"),     # Description
+        ("ALIGN", (2, 1), (2, thank_i - 1 if filler_i is None else filler_i - 1), "CENTER"),   # Qty
+        ("ALIGN", (3, 1), (4, thank_i - 1 if filler_i is None else filler_i - 1), "RIGHT"),    # Rate, Amount
 
-    # Padding
-    ts.add("LEFTPADDING",  (0, 0), (-1, -1), PADDING_H[0])
-    ts.add("RIGHTPADDING", (0, 0), (-1, -1), PADDING_H[1])
-    ts.add("TOPPADDING",   (0, 0), (-1, -1), PADDING_V[0])
-    ts.add("BOTTOMPADDING",(0, 0), (-1, -1), PADDING_V[1])
+        # Padding and vertical alignment
+        ("LEFTPADDING", (0, 0), (-1, -1), PAD_L),
+        ("RIGHTPADDING", (0, 0), (-1, -1), PAD_R),
+        ("TOPPADDING", (0, 0), (-1, -1), PAD_T),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), PAD_B),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
 
-    # Combined Thank you + Total row styling
-    # Left side span across 0..2 and left-align; right side shows Total label and amount
-    ts.add("SPAN", (0, thank_total_i), (2, thank_total_i))
-    ts.add("FONTNAME", (0, thank_total_i), (0, thank_total_i), "Helvetica-Oblique")
-    ts.add("FONTSIZE", (0, thank_total_i), (0, thank_total_i), 10)  # Slightly larger
-    ts.add("TEXTCOLOR", (0, thank_total_i), (0, thank_total_i), BRAND)
-    ts.add("ALIGN", (0, thank_total_i), (0, thank_total_i), "LEFT")
+        # Thank-you + Total row
+        ("SPAN", (0, thank_i), (2, thank_i)),
+        ("FONTNAME", (0, thank_i), (0, thank_i), "Helvetica-Oblique"),
+        ("FONTSIZE", (0, thank_i), (0, thank_i), 10),
+        ("TEXTCOLOR", (0, thank_i), (0, thank_i), BRAND),
+        ("ALIGN", (0, thank_i), (0, thank_i), "LEFT"),
 
-    # Right side: emphasize the total area
-    ts.add("ALIGN", (3, thank_total_i), (3, thank_total_i), "RIGHT")  # "Total:" aligned to right
-    ts.add("ALIGN", (4, thank_total_i), (4, thank_total_i), "RIGHT")  # amount right-aligned
-    ts.add("FONTNAME", (3, thank_total_i), (4, thank_total_i), "Helvetica-Bold")
-    ts.add("FONTSIZE", (3, thank_total_i), (4, thank_total_i), 13)  # Larger for emphasis
-    ts.add("TEXTCOLOR", (3, thank_total_i), (4, thank_total_i), BRAND)
-    ts.add("LINEABOVE", (0, thank_total_i), (-1, thank_total_i), W_HEAVY, BRAND)  # Thicker line above total
-
-    # No filler row to hide
-
-    # Vertically center all cells
-    ts.add("VALIGN", (0, 0), (-1, -1), "MIDDLE")
+        ("ALIGN", (3, thank_i), (3, thank_i), "RIGHT"),
+        ("ALIGN", (4, thank_i), (4, thank_i), "RIGHT"),
+        ("FONTNAME", (3, thank_i), (4, thank_i), "Helvetica-Bold"),
+        ("FONTSIZE", (3, thank_i), (4, thank_i), 13),
+        ("TEXTCOLOR", (3, thank_i), (4, thank_i), BRAND),
+    ("LINEABOVE", (0, thank_i), (-1, thank_i), W_GRID, BRAND),
+    ])
 
     t.setStyle(ts)
     return t

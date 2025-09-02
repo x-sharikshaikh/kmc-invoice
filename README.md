@@ -75,6 +75,13 @@ The app reads/writes in a user‑writable folder:
   - `assets/logo.png` (if present, placed on PDFs)
   - `assets/fonts/` (e.g., `NotoSans-Regular.ttf`, `NotoSans-Bold.ttf`); falls back to Helvetica if missing
 
+Optional settings keys used by the PDF generator (all optional):
+
+- `logo_path`: path to left logo image
+- `name_logo_path` (or `right_logo_path`): path to right-side name/logo image
+- `signature_path`: path to a signature image for the signatory box
+- `business_name`, `owner`, `phone`, `pan`, `permit`, `cheque_to` (or `chequeTo`)
+
 ## Keyboard shortcuts
 
 - Enter/Return: Add an item row (when focus is in the items widget)
@@ -100,6 +107,31 @@ python -m pytest -q
 ```
 
 The PDF test (`tests/test_invoice_pdf.py`) verifies A4 size and key text like `Date:` and `Total:`.
+
+### Generate a sample PDF for quick visual checks
+
+```powershell
+python tools/make_sample_pdf_drawn.py
+```
+
+This renders a sample invoice with the current layout parameters.
+
+## PDF layout tuning (advanced)
+
+Fine-tune the invoice appearance using constants in `app/pdf/pdf_draw.py`:
+
+- `LEFT_LOGO_Y_SHIFT`: move the left logo up/down (default: 7 mm down)
+- `TITLE_X_SHIFT`: shift the “INVOICE” title horizontally (negative = left)
+- `HEADER_RULE_RAISE`: vertical offset for the header underline
+- `TABLE_Y_SHIFT`: vertical offset for the entire items table
+- `FOOTER_SHIFT`: vertical shift for the footer/signatory block
+- Table–footer gap: edit `desired_bottom_y` near `_draw_table_with_platypus` (default: 11 mm)
+
+Table styling is defined in `app/pdf/table_layout.py`:
+
+- Uniform border weight for all table lines (0.5 pt)
+- Header row and totals row are integrated into the table
+- Numeric alignment: Qty centered; Rate/Amount right-aligned
 
 ## Developer utilities
 
