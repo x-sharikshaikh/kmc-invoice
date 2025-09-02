@@ -174,6 +174,10 @@ Notes:
 - Assets (logo, fonts) and `settings.json` are bundled by the script/spec
 - At runtime, resources resolve via PyInstaller’s `_MEIPASS` (bundled) or the project root (dev)
 
+### Reproducible packaging
+
+The `tools/build.spec` is included to ensure consistent builds across machines. You can also run `./tools/build.ps1` which sets up a local venv and invokes PyInstaller using the same config.
+
 ## Troubleshooting
 
 - Virtual env won’t activate: run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once in elevated PowerShell
